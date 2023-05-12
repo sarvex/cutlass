@@ -505,7 +505,7 @@ def _pytorch_gemm(op, name: str, cc: int, jit: bool = False, sourcedir: str = ""
     if sourcedir != "" and not os.path.isdir(sourcedir):
         os.makedirs(sourcedir)
 
-    cuda_file = os.path.join(sourcedir, name + "_kernel.cu")
+    cuda_file = os.path.join(sourcedir, f"{name}_kernel.cu")
     extra_kw = {}
     if op.api == ApiVersion.v3x:
         impl_template = _PYTORCH_GEMM_IMPL_TEMPLATE_3x
@@ -534,7 +534,7 @@ def _pytorch_gemm(op, name: str, cc: int, jit: bool = False, sourcedir: str = ""
     with open(cuda_file, "w") as outfile:
         outfile.write(cuda_source)
 
-    cpp_file = os.path.join(sourcedir, name + ".cpp")
+    cpp_file = os.path.join(sourcedir, f"{name}.cpp")
     cpp_source = SubstituteTemplate(
         _PYTORCH_GEMM_CPP_TEMPLATE,
         {"name": name, "description": f"CUTLASS {op.procedural_name()} GEMM"},
@@ -544,10 +544,7 @@ def _pytorch_gemm(op, name: str, cc: int, jit: bool = False, sourcedir: str = ""
 
     _generate_setup(name, sourcedir)
 
-    if jit:
-        return _jit(name, cc, cpp_file, cuda_file)
-
-    return None
+    return _jit(name, cc, cpp_file, cuda_file) if jit else None
 
 
 def _pytorch_grouped_gemm(
@@ -576,7 +573,7 @@ def _pytorch_grouped_gemm(
     if sourcedir != "" and not os.path.isdir(sourcedir):
         os.makedirs(sourcedir)
 
-    cuda_file = os.path.join(sourcedir, name + "_kernel.cu")
+    cuda_file = os.path.join(sourcedir, f"{name}_kernel.cu")
     cuda_impl = SubstituteTemplate(_PYTORCH_GROUPED_GEMM_IMPL_TEMPLATE, {"name": name})
     cuda_source = SubstituteTemplate(
         _PYTORCH_CUDA_TEMPLATE,
@@ -591,7 +588,7 @@ def _pytorch_grouped_gemm(
     with open(cuda_file, "w") as outfile:
         outfile.write(cuda_source)
 
-    cpp_file = os.path.join(sourcedir, name + ".cpp")
+    cpp_file = os.path.join(sourcedir, f"{name}.cpp")
     cpp_source = SubstituteTemplate(
         _PYTORCH_GROUPED_GEMM_CPP_TEMPLATE,
         {"name": name, "description": f"CUTLASS {op.procedural_name()} grouped GEMM"},
@@ -601,10 +598,7 @@ def _pytorch_grouped_gemm(
 
     _generate_setup(name, sourcedir)
 
-    if jit:
-        return _jit(name, cc, cpp_file, cuda_file)
-
-    return None
+    return _jit(name, cc, cpp_file, cuda_file) if jit else None
 
 
 def pytorch(op, name: str, cc: int, jit: bool = False, sourcedir: str = ""):

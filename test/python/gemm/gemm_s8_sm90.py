@@ -107,11 +107,7 @@ def add_test(cls, layouts, alignments, element_output, element_accumulator,
         op = plan.construct(tile_description=td, alignment_A=alignment_A, alignment_B=alignment_B, alignment_C=alignment_C)
         self.assertTrue(test_all_gemm(op, 'universal'))
 
-    if persistent:
-        suffix = "_persistent"
-    else:
-        suffix = ""
-
+    suffix = "_persistent" if persistent else ""
     element_epilogue = element_accumulator
     name = name_fn(layouts, alignments, binding_type(element_output), binding_type(element_accumulator),
                    binding_type(element_epilogue), cluster_shape, threadblock_shape, stages,

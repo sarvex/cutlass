@@ -61,12 +61,7 @@ class ArgumentBase:
         **kwargs,
     ) -> None:
         # tensor_C can be interpreted as the bias with bias=True in keyword args
-        if "bias" in kwargs.keys():
-            self.bias = kwargs["bias"]
-        else:
-            # by default, tensor_C is not bias
-            self.bias = False
-
+        self.bias = kwargs.get("bias", False)
         # preprocessing input tensors
         if isinstance(A, np.ndarray):
             self.host_D = D
@@ -107,7 +102,7 @@ class ArgumentBase:
         if stream_sync:
             (err,) = cudart.cudaDeviceSynchronize()
             if err != cuda.CUresult.CUDA_SUCCESS:
-                raise RuntimeError("CUDA Error %s" % str(err))
+                raise RuntimeError(f"CUDA Error {str(err)}")
 
         if hasattr(self, "host_D"):
             (err,) = cuda.cuMemcpyDtoH(
@@ -116,4 +111,4 @@ class ArgumentBase:
                 self.host_D.size * self.host_D.itemsize,
             )
             if err != cuda.CUresult.CUDA_SUCCESS:
-                raise RuntimeError("CUDA Error %s" % str(err))
+                raise RuntimeError(f"CUDA Error {str(err)}")

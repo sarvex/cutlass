@@ -130,17 +130,19 @@ class KernelsForDataType:
         # Determine the leading dimension of the shape
         if layout == cutlass.LayoutType.RowMajor:
             ld = shape[0]
-        elif layout == cutlass.LayoutType.RowMajor:
-            ld = shape[1]
         else:
             raise Exception(f"Unexpected or unsupported layout {layout}")
 
-        for alignment in sorted(list(self.kernels_by_alignment.keys()), reverse=True):
-            if ld % alignment == 0:
-                return alignment
-
-        # Default to alignment of 1 if no others match
-        return 1
+        return next(
+            (
+                alignment
+                for alignment in sorted(
+                    list(self.kernels_by_alignment.keys()), reverse=True
+                )
+                if ld % alignment == 0
+            ),
+            1,
+        )
 
     def sort(self):
         """
@@ -196,7 +198,7 @@ class ArchOptions:
 
         # Identify the method within CUTLASS generator script that generates kernel
         # descriptions for the target CC
-        generate_function_name = "GenerateSM" + str(kernel_cc)
+        generate_function_name = f"GenerateSM{str(kernel_cc)}"
         if not hasattr(prof_generator, generate_function_name):
             cutlass.logger.warning(f"No generator found for architecture {kernel_cc}")
             return
@@ -328,7 +330,7 @@ class ArchOptions:
                 self.operations_by_opclass[cutlass.OpcodeClass.Simt][comb] = new_kernels
 
         # Sort all operations
-        for oc in self.operations_by_opclass.keys():
+        for oc in self.operations_by_opclass:
             for comb in self.operations_by_opclass[oc].keys():
                 self.operations_by_opclass[oc][comb].sort()
 
@@ -378,14 +380,16 @@ class ArchOptions:
         :return: set of operation classes that support the provided data type combination
         :rtype: set
         """
-        supporting_op_classes = set()
         datatype_comb = (element_a, element_b, element_accumulator)
         layout_comb = (layout_a, layout_b)
 
-        for op_class in self.operations_by_opclass.keys():
-            if self.opclass_supports_combination(op_class, datatype_comb, layout_comb):
-                supporting_op_classes.add(op_class)
-        return supporting_op_classes
+        return {
+            op_class
+            for op_class in self.operations_by_opclass.keys()
+            if self.opclass_supports_combination(
+                op_class, datatype_comb, layout_comb
+            )
+        }
 
     def operations(
         self,

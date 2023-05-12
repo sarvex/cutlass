@@ -44,7 +44,7 @@ def append_word(word):
 
 
 def gen_namespace(namespace, codeBody):
-    code_gen = "namespace " + namespace + " {\n"
+    code_gen = f"namespace {namespace}" + " {\n"
     code_gen += codeBody
     code_gen += "} // namespace " + namespace + "\n"
     return code_gen
@@ -63,29 +63,24 @@ def gen_expression(type, lval, rval = None):
 def gen_class(name, codeBody, inheritance_code = None):
     code_gen = ""
     if inheritance_code is None:
-        code_gen = "class " + name + "{\n"
+        code_gen = f"class {name}" + "{\n"
     else:
-        code_gen = "class " + name + " : "+ inheritance_code + "{\n"
+        code_gen = f"class {name} : {inheritance_code}" + "{\n"
     code_gen += codeBody
     code_gen += "}; // class " + name + "\n"
     return code_gen
 
 
 def gen_struct(name, codeBody, specialized = None):
-    specialized_code = ""
-    if specialized is not None:
-        specialized_code = "<" + specialized + ">"
-    code_gen = "struct " + name + specialized_code + "{\n"
+    specialized_code = f"<{specialized}>" if specialized is not None else ""
+    code_gen = f"struct {name}{specialized_code}" + "{\n"
     code_gen += codeBody
     code_gen += "}; // struct " + name + "\n"
     return code_gen
 
 
 def gen_template_arg(arg_type, arg_name, default_val = None):
-    rval = None
-    if default_val is not None:
-        rval = str(default_val)
-
+    rval = str(default_val) if default_val is not None else None
     arg_typename = ""
     if arg_type is int:
         arg_typename = "int"
@@ -94,7 +89,7 @@ def gen_template_arg(arg_type, arg_name, default_val = None):
     else:
         arg_typename = "typename"
 
-    internal_arg_name = arg_name + "_"
+    internal_arg_name = f"{arg_name}_"
 
     code_gen = indentation
     code_gen += gen_expression(arg_typename, internal_arg_name, rval)
@@ -104,9 +99,8 @@ def gen_template_arg(arg_type, arg_name, default_val = None):
 
 def gen_template_args(args, set_default = True):
     arg_len = len(args)
-    cnt = 1
     code_gen = ""
-    for arg_tuple in args:
+    for cnt, arg_tuple in enumerate(args, start=1):
         arg_type = arg_tuple[0]
         arg_name = arg_tuple[1]
         arg_default_val = None
@@ -116,8 +110,6 @@ def gen_template_args(args, set_default = True):
         code_gen += gen_template_arg(arg_type, arg_name, arg_default_val)
         if cnt != arg_len:
             code_gen += ",\n"
-        cnt += 1
-
     return code_gen
 
 
@@ -134,7 +126,7 @@ def export_template_args(args):
         code_gen += indentation
         arg_type = arg_tuple[0]
         arg_name = arg_tuple[1]
-        internal_arg_name = arg_name + "_"
+        internal_arg_name = f"{arg_name}_"
 
         typename = ""
         if arg_type is int:
@@ -170,15 +162,13 @@ def gen_template_struct(struct_name, args, codeBody, speicalized = None, set_def
 
 
 def gen_declare_template_struct(name, *params):
-    code = name + "<"
-    cnt = 0
+    code = f"{name}<"
     param_num = len(params)
-    for param in params:
+    for cnt, param in enumerate(params):
         final = ", "
         if cnt == param_num - 1:
             final = ""
         code += param + final
-        cnt += 1
     code += ">;\n"
     return code
 
@@ -189,11 +179,7 @@ def filtered_param(params, name_and_value_pair, keep_ = False):
 
     for param in params:
         param_name = ""
-        if len(param) >= 1:
-            param_name = param[1]
-        else:
-            param_name = param[0]
-        
+        param_name = param[1] if len(param) >= 1 else param[0]
         hit_flag = False
         set_value = ""
         for n_v_pair in name_and_value_pair:
@@ -201,34 +187,33 @@ def filtered_param(params, name_and_value_pair, keep_ = False):
             filter_name = n_v_pair[0]
             set_value = n_v_pair[1]
 
-            if param_name == (filter_name + "_") or param_name == filter_name :
+            if param_name in [f"{filter_name}_", filter_name]:
                 hit_flag = True
                 break
 
-            
+
         if hit_flag is False:
             rtn_template_args.append(param)
 
         if hit_flag is True:
             speicalized_template_args.append(set_value)
+        elif keep_ is True:
+            speicalized_template_args.append(f"{param_name}_")
         else:
-            if keep_ is True:
-                speicalized_template_args.append(param_name + "_")
-            else:
-                speicalized_template_args.append(param_name)
+            speicalized_template_args.append(param_name)
 
-    
+
     specialized_template_arg_str = helper.list_2_string(speicalized_template_args)
-    
+
     return rtn_template_args, specialized_template_arg_str
 
             
 def gen_func(func_name, arg_lists, code_body, only_declare = False, with_cudaStream = True):
-    code = "void " + func_name + "(\n"
+    code = f"void {func_name}" + "(\n"
     for arg in arg_lists:
         arg_tp = arg[0]
         arg_nm = arg[1]
-        code += "    " + arg_tp + " " + arg_nm + ",\n"
+        code += f"    {arg_tp} {arg_nm}" + ",\n"
     code += "cudaStream_t stream)"
     if only_declare :
         return code
@@ -240,10 +225,7 @@ def gen_func(func_name, arg_lists, code_body, only_declare = False, with_cudaStr
 
 
 def indent_level(code, level = 0):
-    rtn_code = ""
-    for i in range(level):
-        rtn_code += "    "
-    
+    rtn_code = "".join("    " for _ in range(level))
     rtn_code += code
 
     return rtn_code

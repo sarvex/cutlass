@@ -61,13 +61,9 @@ class CompilationOptions:
         self.arch = arch
 
     def get_str(self):
-        options = ""
-
-        for flag in self.flags:
-            options += " " + flag
-
+        options = "".join(f" {flag}" for flag in self.flags)
         for incl in self.include_paths:
-            options += " --include-path=%s" % incl
+            options += f" --include-path={incl}"
 
         arch_flag = " -arch=sm_%d" % self.arch
         if self.arch == 90:
@@ -77,14 +73,11 @@ class CompilationOptions:
         return options
 
     def get(self):
-        options = []
-
-        for flag in self.flags:
-            options.append(bytes(str.encode(flag)))
-
-        for incl in self.include_paths:
-            options.append(bytes(str.encode("--include-path=%s" % incl)))
-
+        options = [bytes(str.encode(flag)) for flag in self.flags]
+        options.extend(
+            bytes(str.encode(f"--include-path={incl}"))
+            for incl in self.include_paths
+        )
         arch_flag = " -arch=sm_%d" % self.arch
         if self.arch == 90:
             arch_flag += "a"
@@ -105,8 +98,7 @@ def CDLLBin(host_binary):
     temp_so = tempfile.NamedTemporaryFile(prefix="host_func", suffix=".so", delete=True)
     with open(temp_so.name, "wb") as file:
         file.write(host_binary)
-    host_lib = ctypes.CDLL(temp_so.name)
-    return host_lib
+    return ctypes.CDLL(temp_so.name)
 
 
 class ArtifactManager:
@@ -169,26 +161,24 @@ class ArtifactManager:
             op_attr = json.loads(op_attr)
             err, module = cuda.cuModuleLoadData(cubin_image)
             if err != cuda.CUresult.CUDA_SUCCESS:
-                raise RuntimeError("Cuda Error: {}".format(err))
+                raise RuntimeError(f"Cuda Error: {err}")
 
             err, kernel = cuda.cuModuleGetFunction(module, bytes(str.encode(operation_name)))
             self.compiled_cache_device.insert(key, kernel)
 
-            compiled_host_fns = {}
             host_lib = CDLLBin(host_binary)
 
-            func_name = operation_name + "_get_params"
+            func_name = f"{operation_name}_get_params"
             func = getattr(host_lib, func_name)
             func.restype = ctypes.POINTER(ctypes.c_char * op_attr[0])
-            compiled_host_fns["get_args"] = func
-
-            func_name = operation_name + "_shared_memory_size"
+            compiled_host_fns = {"get_args": func}
+            func_name = f"{operation_name}_shared_memory_size"
             func = getattr(host_lib, func_name)
             compiled_host_fns["shared_memory_capacity"] = func()
 
             for attr in op_attr:
                 if isinstance(attr, str):
-                    func_name = operation_name + "_" + attr
+                    func_name = f"{operation_name}_{attr}"
                     func = getattr(host_lib, func_name)
 
                     # Set the return type of the function
@@ -204,8 +194,6 @@ class ArtifactManager:
         """
         Compile a list of kernels and store them into database
         """
-        source_buffer_device = ""
-        source_buffer_host = ""
         # 1. include
         includes = []
         for operation in operation_list:
@@ -214,19 +202,21 @@ class ArtifactManager:
                     includes.append(incl)
 
         includes_host = ["builtin_types.h", "device_launch_parameters.h", "stddef.h"] + includes
-        for incl in includes:
-            source_buffer_device += SubstituteTemplate(
+        source_buffer_device = "".join(
+            SubstituteTemplate(
                 IncludeTemplate,
                 {"include": incl},
             )
-
-        for incl in includes_host:
-            if "/device/" not in incl:
-                source_buffer_host += SubstituteTemplate(
-                    IncludeTemplate,
-                    {"include": incl},
-                )
-
+            for incl in includes
+        )
+        source_buffer_host = "".join(
+            SubstituteTemplate(
+                IncludeTemplate,
+                {"include": incl},
+            )
+            for incl in includes_host
+            if "/device/" not in incl
+        )
         # 2. Operations
         for operation in operation_list:
             source_buffer_device += operation.emit()
@@ -249,36 +239,36 @@ class ArtifactManager:
                 0, [], [])
 
             if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
-                raise RuntimeError("NVRTC Error: {}".format(err))
+                raise RuntimeError(f"NVRTC Error: {err}")
 
             # Compile program
             options = compilation_options.get()
 
             err, = nvrtc.nvrtcCompileProgram(program, len(options), options)
             if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
-                error_string = "NVRTC Error: {}\n".format(err)
+                error_string = f"NVRTC Error: {err}\n"
 
                 # Get log from compilation
                 err, logSize = nvrtc.nvrtcGetProgramLogSize(program)
                 if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
-                    raise RuntimeError("NVRTC Error: {}".format(err))
+                    raise RuntimeError(f"NVRTC Error: {err}")
 
                 log = b" " * logSize
                 err, = nvrtc.nvrtcGetProgramLog(program, log)
                 if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
-                    raise RuntimeError("NVRTC Error: {}".format(err))
+                    raise RuntimeError(f"NVRTC Error: {err}")
 
                 raise RuntimeError(error_string + log.decode() + source_buffer_device)
 
             # Get data from compilation
             err, dataSize = nvrtc.nvrtcGetCUBINSize(program)
             if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
-                raise RuntimeError("NVRTC Error: {}".format(err))
+                raise RuntimeError(f"NVRTC Error: {err}")
 
             cubin_image = b" " * dataSize
             (err,) = nvrtc.nvrtcGetCUBIN(program, cubin_image)
             if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
-                raise RuntimeError("NVRTC Error: {}".format(err))
+                raise RuntimeError(f"NVRTC Error: {err}")
 
         else:  # with nvcc backend
             # emit code
@@ -320,10 +310,7 @@ class ArtifactManager:
             )
         else:
             options = compilation_options.get()
-            cmd = (
-                "echo '%s'|g++ -x c++ -fpermissive -w -fPIC -DCUTLASS_PYTHON_HOST_CC=1"
-                % source_buffer_host
-            )
+            cmd = f"echo '{source_buffer_host}'|g++ -x c++ -fpermissive -w -fPIC -DCUTLASS_PYTHON_HOST_CC=1"
             filtered_opts = [
                 "-default-device",
                 "-Xcicc",
@@ -340,13 +327,13 @@ class ArtifactManager:
                             "-I",
                         )
                     else:
-                        cmd += " " + opt
+                        cmd += f" {opt}"
 
         tempfile.tempdir = "./"
         temp = tempfile.NamedTemporaryFile(
             prefix="host_func", suffix=".so", delete=True)
 
-        cmd += " - -shared -o %s -lcudart -lcuda" % temp.name
+        cmd += f" - -shared -o {temp.name} -lcudart -lcuda"
         os.system(cmd)
         host_lib = ctypes.CDLL(temp.name)
 

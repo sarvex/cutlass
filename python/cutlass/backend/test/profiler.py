@@ -43,27 +43,24 @@ class GpuTimer:
     def start(self, stream=cuda.CUstream(0)):
         (err,) = cuda.cuEventRecord(self.events[0], stream)
         if err != cuda.CUresult.CUDA_SUCCESS:
-            raise RuntimeError("CUDA Error %s" % str(err))
+            raise RuntimeError(f"CUDA Error {str(err)}")
 
     def stop(self, stream=cuda.CUstream(0)):
         (err,) = cuda.cuEventRecord(self.events[1], stream)
         if err != cuda.CUresult.CUDA_SUCCESS:
-            raise RuntimeError("CUDA Error %s" % str(err))
-        pass
+            raise RuntimeError(f"CUDA Error {str(err)}")
 
     def stop_and_wait(self, stream=cuda.CUstream(0)):
         self.stop(stream)
         if stream:
             (err,) = cuda.cuStreamSynchronize(stream)
-            if err != cuda.CUresult.CUDA_SUCCESS:
-                raise RuntimeError("CUDA Error %s" % str(err))
         else:
             (err,) = cudart.cudaDeviceSynchronize()
-            if err != cuda.CUresult.CUDA_SUCCESS:
-                raise RuntimeError("CUDA Error %s" % str(err))
+        if err != cuda.CUresult.CUDA_SUCCESS:
+            raise RuntimeError(f"CUDA Error {str(err)}")
 
     def duration(self, iterations=1):
         err, duration = cuda.cuEventElapsedTime(self.events[0], self.events[1])
         if err != cuda.CUresult.CUDA_SUCCESS:
-            raise RuntimeError("CUDA Error %s" % str(err))
+            raise RuntimeError(f"CUDA Error {str(err)}")
         return duration / float(iterations)

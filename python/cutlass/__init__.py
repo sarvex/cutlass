@@ -48,7 +48,7 @@ def _cuda_install_path_from_nvcc() -> str:
     # Attempt to detect CUDA_INSTALL_PATH based on location of NVCC
     result = subprocess.run(['which', 'nvcc'], capture_output=True)
     if result.returncode != 0:
-        raise Exception(f'Unable to find nvcc via `which` utility.')
+        raise Exception('Unable to find nvcc via `which` utility.')
 
     cuda_install_path = result.stdout.decode('utf-8').split('/bin/nvcc')[0]
     if not os.path.isdir(cuda_install_path):

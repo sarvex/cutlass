@@ -53,11 +53,7 @@ def type_2_cutlass_type(input_type = "fp16"):
 def cvt_2_cutlass_shape(gemm_shape):
     # gemm shape
     if len(gemm_shape) == 3:
-        val = "cutlass::gemm::GemmShape<"  \
-                                        + str(gemm_shape[0]) + ", " \
-                                        + str(gemm_shape[1]) + ", " \
-                                        + str(gemm_shape[2]) + ">" 
-        return val
+        return f"cutlass::gemm::GemmShape<{str(gemm_shape[0])}, {str(gemm_shape[1])}, {str(gemm_shape[2])}>"
 
 
 def write_2_headfile(filename, file_dir, string):
@@ -70,14 +66,11 @@ def var_idx(varaiable, index):
 
 def list_2_string(input_list, ):
     rtn_string = ""
-    
-    cnt = 0
 
-    for element in input_list:
+    for cnt, element in enumerate(input_list):
         final = ", \n"
         if cnt == len(input_list) - 1:
             final = "\n"
-        cnt += 1
         rtn_string += str(element) + final
 
     return rtn_string

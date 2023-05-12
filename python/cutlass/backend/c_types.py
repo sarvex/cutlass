@@ -182,13 +182,12 @@ def get_mainloop_arguments_3x(
             return _MainloopArgumentsTma
         else:
             return _MainloopArgumentsMultistage
+    elif is_tma_aligned:
+        return _MainloopArgumentsTma
     else:
-        if is_tma_aligned:
-            return _MainloopArgumentsTma
-        else:
-            raise Exception(f"Specified a kernel schedule using TMA ({kernel_schedule}), but "
-                            "the provided data types and alignments are not properly aligned for "
-                            "using TMA.")
+        raise Exception(f"Specified a kernel schedule using TMA ({kernel_schedule}), but "
+                        "the provided data types and alignments are not properly aligned for "
+                        "using TMA.")
 
 
 def get_gemm_arguments_3x(mainloop_arguments, epilogue_functor):

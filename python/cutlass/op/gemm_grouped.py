@@ -195,15 +195,16 @@ class GroupedGemm(Gemm):
                 raise Exception(f"Invalid tile description. {err_str}")
             self.tile_description = tile_description
 
-        operation = GemmOperationGrouped(
+        return GemmOperationGrouped(
             arch=self.current_cc,
             tile_description=tile_description,
-            A=tensor_A, B=tensor_B, C=tensor_C,
+            A=tensor_A,
+            B=tensor_B,
+            C=tensor_C,
             epilogue_functor=self.epilogue_functor,
             swizzling_functor=self._swizzling_functor,
-            precompute_mode=SchedulerMode.Device)
-
-        return operation
+            precompute_mode=SchedulerMode.Device,
+        )
 
     def run(self, A, B, C, D,
             alpha=None, beta=None, sync: bool = True,

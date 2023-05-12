@@ -46,7 +46,7 @@ def _cuda_install_path_from_nvcc() -> str:
     # Attempt to detect CUDA_INSTALL_PATH based on location of NVCC
     result = subprocess.run(['which', 'nvcc'], capture_output=True)
     if result.returncode != 0:
-        raise Exception(f'Unable to find nvcc via `which` utility.')
+        raise Exception('Unable to find nvcc via `which` utility.')
 
     cuda_install_path = result.stdout.decode('utf-8').split('/bin/nvcc')[0]
     if not os.path.isdir(cuda_install_path):
@@ -72,10 +72,10 @@ ext_modules = []
 try:
     from pybind11.setup_helpers import Pybind11Extension, build_ext
     include_dirs = [
-        cutlass_path + '/include',
-        cuda_install_path + '/include',
-        cutlass_path + '/tools/util/include',
-        cutlass_path + '/test',
+        f'{cutlass_path}/include',
+        f'{cuda_install_path}/include',
+        f'{cutlass_path}/tools/util/include',
+        f'{cutlass_path}/test',
     ]
 
     ext_modules = [

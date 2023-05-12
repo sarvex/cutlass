@@ -180,7 +180,7 @@ class DataTypeSizeBytes:
     """
 
     @staticmethod
-    def __class_getitem__(datatype):
+    def __class_getitem__(cls):
         """
         Returns the number of bytes in size the data type is. Raises an exception if the data type
         is either less than a full byte or a non-integer number of bytes in size.
@@ -190,15 +190,11 @@ class DataTypeSizeBytes:
         :return: number of bytes the data type occupies
         :rtype: int
         """
-        bits = DataTypeSize[datatype]
+        bits = DataTypeSize[cls]
         if bits < 8:
-            raise Exception(
-                "Data type {} is less than one byte in size.".format(datatype)
-            )
+            raise Exception(f"Data type {cls} is less than one byte in size.")
         elif bits % 8 != 0:
-            raise Exception(
-                "Data type {} is not an integer number of bytes.".format(datatype)
-            )
+            raise Exception(f"Data type {cls} is not an integer number of bytes.")
         return bits // 8
 
 
@@ -216,24 +212,21 @@ RealComplexBijection = [
 
 
 def is_complex(data_type):
-    for r, c in RealComplexBijection:
-        if data_type == c:
-            return True
-    return False
+    return any(data_type == c for r, c in RealComplexBijection)
 
 
 def get_complex_from_real(real_type):
-    for r, c in RealComplexBijection:
-        if real_type == r:
-            return c
-    return cutlass_bindings.dtype.invalid
+    return next(
+        (c for r, c in RealComplexBijection if real_type == r),
+        cutlass_bindings.dtype.invalid,
+    )
 
 
 def get_real_from_complex(complex_type):
-    for r, c in RealComplexBijection:
-        if complex_type == c:
-            return r
-    return cutlass_bindings.dtype.invalid
+    return next(
+        (r for r, c in RealComplexBijection if complex_type == c),
+        cutlass_bindings.dtype.invalid,
+    )
 
 
 class ComplexMultiplyOp(enum.Enum):
@@ -603,17 +596,15 @@ class TileDescription:
         :rtype: int
         """
         emit_stages = 0 if self.stages is None else self.stages
-        name = "%dx%dx%d_%dx%d_%dx%d" % (
+        return "%dx%dx%d_%dx%d_%dx%d" % (
             self.cluster_shape[0],
             self.cluster_shape[1],
             self.cluster_shape[2],
             self.threadblock_shape[0],
             self.threadblock_shape[1],
             self.threadblock_shape[2],
-            emit_stages
+            emit_stages,
         )
-
-        return name
 
     def __str__(self):
         """
@@ -666,7 +657,7 @@ def CalculateSmemUsagePerStage(operation):
             + stage_barrier_bytes
         )
     else:
-        raise Exception("Unsupported operation kind {}.".format(operation.operation_kind))
+        raise Exception(f"Unsupported operation kind {operation.operation_kind}.")
 
 
 def CalculateSmemUsage(operation):

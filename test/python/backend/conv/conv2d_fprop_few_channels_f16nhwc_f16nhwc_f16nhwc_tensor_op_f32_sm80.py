@@ -40,7 +40,7 @@ import unittest
 
 @unittest.skipIf(device_cc() < 80, "Device compute capability is insufficient for SM80 tests.")
 def conv2d_few_channel_problemsizes(channels):
-    problem_sizes = [
+    return [
         cutlass_bindings.conv.Conv2dProblemSize(
             cutlass_bindings.Tensor4DCoord(1, 8, 8, channels),
             cutlass_bindings.Tensor4DCoord(16, 3, 3, channels),
@@ -48,7 +48,8 @@ def conv2d_few_channel_problemsizes(channels):
             cutlass_bindings.MatrixCoord(2, 2),
             cutlass_bindings.MatrixCoord(1, 1),
             cutlass_bindings.conv.Mode.cross_correlation,
-            1, 1
+            1,
+            1,
         ),
         cutlass_bindings.conv.Conv2dProblemSize(
             cutlass_bindings.Tensor4DCoord(1, 16, 16, channels),
@@ -57,7 +58,8 @@ def conv2d_few_channel_problemsizes(channels):
             cutlass_bindings.MatrixCoord(2, 2),
             cutlass_bindings.MatrixCoord(1, 1),
             cutlass_bindings.conv.Mode.cross_correlation,
-            1, 1
+            1,
+            1,
         ),
         cutlass_bindings.conv.Conv2dProblemSize(
             cutlass_bindings.Tensor4DCoord(1, 16, 16, channels),
@@ -66,7 +68,8 @@ def conv2d_few_channel_problemsizes(channels):
             cutlass_bindings.MatrixCoord(1, 1),
             cutlass_bindings.MatrixCoord(1, 1),
             cutlass_bindings.conv.Mode.cross_correlation,
-            1, 1
+            1,
+            1,
         ),
         cutlass_bindings.conv.Conv2dProblemSize(
             cutlass_bindings.Tensor4DCoord(1, 224, 224, channels),
@@ -75,7 +78,8 @@ def conv2d_few_channel_problemsizes(channels):
             cutlass_bindings.MatrixCoord(1, 1),
             cutlass_bindings.MatrixCoord(1, 1),
             cutlass_bindings.conv.Mode.cross_correlation,
-            1, 1
+            1,
+            1,
         ),
         cutlass_bindings.conv.Conv2dProblemSize(
             cutlass_bindings.Tensor4DCoord(1, 224, 224, channels),
@@ -84,7 +88,8 @@ def conv2d_few_channel_problemsizes(channels):
             cutlass_bindings.MatrixCoord(2, 2),
             cutlass_bindings.MatrixCoord(1, 1),
             cutlass_bindings.conv.Mode.cross_correlation,
-            1, 1
+            1,
+            1,
         ),
         cutlass_bindings.conv.Conv2dProblemSize(
             cutlass_bindings.Tensor4DCoord(1, 224, 224, channels),
@@ -93,7 +98,8 @@ def conv2d_few_channel_problemsizes(channels):
             cutlass_bindings.MatrixCoord(1, 1),
             cutlass_bindings.MatrixCoord(1, 1),
             cutlass_bindings.conv.Mode.cross_correlation,
-            1, 1
+            1,
+            1,
         ),
         cutlass_bindings.conv.Conv2dProblemSize(
             cutlass_bindings.Tensor4DCoord(1, 224, 224, channels),
@@ -102,11 +108,10 @@ def conv2d_few_channel_problemsizes(channels):
             cutlass_bindings.MatrixCoord(2, 2),
             cutlass_bindings.MatrixCoord(1, 1),
             cutlass_bindings.conv.Mode.cross_correlation,
-            1, 1
+            1,
+            1,
         ),
     ]
-
-    return problem_sizes
 
 class Conv2dFpropFewChannelsF16NHWCF16NHWCF16HNWCTensorOpF32SM80(unittest.TestCase):
     def test_SM80_Device_Conv2d_Fprop_Few_Channels_ImplicitGemm_f16nhwc_f16nhwc_f16nhwc_tensor_op_f32_channels_2(self):

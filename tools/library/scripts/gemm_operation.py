@@ -23,7 +23,7 @@ from library import *
 class GemmOperation:
   #
   def __init__(self, gemm_kind, arch, tile_description, A, B, C, element_epilogue, \
-      epilogue_functor = EpilogueFunctor.LinearCombination, swizzling_functor = SwizzlingFunctor.Identity8, D = None, 
+        epilogue_functor = EpilogueFunctor.LinearCombination, swizzling_functor = SwizzlingFunctor.Identity8, D = None, 
       kernel_schedule = KernelScheduleType.ScheduleAuto, epilogue_schedule = EpilogueScheduleType.ScheduleAuto):
 
     self.prefix = "3x" if gemm_kind == GemmKind.Universal3x else ""
@@ -34,8 +34,8 @@ class GemmOperation:
     self.A = A
     self.B = B
     self.C = C
-    self.D = D 
-    if self.D == None:
+    self.D = D
+    if self.D is None:
       self.D = self.C
 
     if gemm_kind != GemmKind.Universal3x:
@@ -64,15 +64,12 @@ class GemmOperation:
   def accumulator_type(self):
     accum = self.tile_description.math_instruction.element_accumulator
 
-    if self.is_complex():
-      return get_complex_from_real(accum)
-
-    return accum
+    return get_complex_from_real(accum) if self.is_complex() else accum
 
   #
   def short_math_name(self):
     if self.tile_description.math_instruction.math_operation == MathOperation.multiply_add_complex_gaussian:
-      return "g%s" % ShortDataTypeNames[self.accumulator_type()]
+      return f"g{ShortDataTypeNames[self.accumulator_type()]}"
     return ShortDataTypeNames[self.accumulator_type()]
 
 
@@ -88,11 +85,13 @@ class GemmOperation:
       MathOperation.xor_popc: 'xor',
     }
 
-    if self.tile_description.math_instruction.opcode_class == OpcodeClass.TensorOp or \
-      self.tile_description.math_instruction.opcode_class == OpcodeClass.WmmaTensorOp:
+    if self.tile_description.math_instruction.opcode_class in [
+        OpcodeClass.TensorOp,
+        OpcodeClass.WmmaTensorOp,
+    ]:
 
       math_op = self.tile_description.math_instruction.math_operation
-      math_op_string = math_operations_map[math_op] if math_op in math_operations_map.keys() else ''
+      math_op_string = math_operations_map.get(math_op, '')
 
       if self.gemm_kind == GemmKind.Universal3x:
         inst_shape = "{0}x{1}x{2}".format(*tuple(self.tile_description.math_instruction.instruction_shape))
@@ -101,26 +100,27 @@ class GemmOperation:
 
       inst_shape += math_op_string
 
-      if self.tile_description.math_instruction.element_a != self.A.element and \
-        self.tile_description.math_instruction.element_a != self.tile_description.math_instruction.element_accumulator:
+      if self.tile_description.math_instruction.element_a not in [
+          self.A.element,
+          self.tile_description.math_instruction.element_accumulator,
+      ]:
         intermediate_type = DataTypeNames[self.tile_description.math_instruction.element_a]
 
-    return "%s%s%s%s" % (self.short_math_name(), inst_shape, intermediate_type, GemmKindNames[self.gemm_kind])
+    return f"{self.short_math_name()}{inst_shape}{intermediate_type}{GemmKindNames[self.gemm_kind]}"
 
   # Generates a string representing the MMA instruction.
   def extended_name(self):
     ''' Append data types if they differ from compute type. '''
     if self.is_complex():
       extended_name = "${core_name}"
+    elif self.C.element != self.tile_description.math_instruction.element_accumulator and \
+          self.A.element != self.tile_description.math_instruction.element_accumulator:
+      extended_name = "${element_c}_${core_name}_${element_a}"
+    elif self.C.element == self.tile_description.math_instruction.element_accumulator and  \
+        self.A.element != self.tile_description.math_instruction.element_accumulator:
+      extended_name = "${core_name}_${element_a}"
     else:
-      if self.C.element != self.tile_description.math_instruction.element_accumulator and \
-        self.A.element != self.tile_description.math_instruction.element_accumulator:
-        extended_name = "${element_c}_${core_name}_${element_a}"
-      elif self.C.element == self.tile_description.math_instruction.element_accumulator and  \
-        self.A.element != self.tile_description.math_instruction.element_accumulator:
-        extended_name = "${core_name}_${element_a}"
-      else:
-        extended_name = "${core_name}"
+      extended_name = "${core_name}"
 
     extended_name = SubstituteTemplate(extended_name, {
       'element_a': DataTypeNames[self.A.element],
@@ -132,36 +132,28 @@ class GemmOperation:
 
   def extended_name_3x(self):
     '''Generates a string representing the MMA atom. Assumes accumulator type is C type.'''
-    extended_name = "{core_name}_{element_a}_{element_b}_{element_acc}_{element_c}_{element_d}".format(
-      element_a = DataTypeNames[self.A.element],
-      element_b = DataTypeNames[self.B.element],
-      element_acc = DataTypeNames[self.tile_description.math_instruction.element_accumulator],
-      element_c = DataTypeNames[self.C.element],
-      element_d = DataTypeNames[self.D.element],
-      core_name = self.core_name())
-    return extended_name
+    return "{core_name}_{element_a}_{element_b}_{element_acc}_{element_c}_{element_d}".format(
+        element_a=DataTypeNames[self.A.element],
+        element_b=DataTypeNames[self.B.element],
+        element_acc=DataTypeNames[
+            self.tile_description.math_instruction.element_accumulator],
+        element_c=DataTypeNames[self.C.element],
+        element_d=DataTypeNames[self.D.element],
+        core_name=self.core_name(),
+    )
 
   # Generates a short string representing the AB layout tags (e.g. nt or tn)
   def layout_name(self):
     if self.is_complex() or self.is_planar_complex():
-      return "%s%s" % (
-        ShortComplexLayoutNames[(self.A.layout, self.A.complex_transform)], 
-        ShortComplexLayoutNames[(self.B.layout, self.B.complex_transform)]
-      )
-    return "%s%s" % (ShortLayoutTypeNames[self.A.layout], ShortLayoutTypeNames[self.B.layout])
+      return f"{ShortComplexLayoutNames[self.A.layout, self.A.complex_transform]}{ShortComplexLayoutNames[self.B.layout, self.B.complex_transform]}"
+    return f"{ShortLayoutTypeNames[self.A.layout]}{ShortLayoutTypeNames[self.B.layout]}"
 
   # Generates a short string representing the ABC layout tags (e.g. ntn or tnn)
   def layout_name_3x(self):
     if self.is_complex() or self.is_planar_complex():
-      return "{}{}{}".format(
-        ShortComplexLayoutNames[(self.A.layout, self.A.complex_transform)], 
-        ShortComplexLayoutNames[(self.B.layout, self.B.complex_transform)],
-        ShortComplexLayoutNames[(self.C.layout, self.C.complex_transform)])
+      return f"{ShortComplexLayoutNames[self.A.layout, self.A.complex_transform]}{ShortComplexLayoutNames[self.B.layout, self.B.complex_transform]}{ShortComplexLayoutNames[self.C.layout, self.C.complex_transform]}"
     else:
-      return "{}{}{}".format(
-        ShortLayoutTypeNames[self.A.layout],
-        ShortLayoutTypeNames[self.B.layout],
-        ShortLayoutTypeNames[self.C.layout])
+      return f"{ShortLayoutTypeNames[self.A.layout]}{ShortLayoutTypeNames[self.B.layout]}{ShortLayoutTypeNames[self.C.layout]}"
 
   # Generates a short string representing underlying kernel schedule type
   def kernel_schedule_name_3x(self):
@@ -545,9 +537,9 @@ ${compile_guard_end}
       LayoutType.RowMajor: LayoutType.ColumnMajor
     }
 
-    if operation.A.layout in transpose_layouts.keys() and \
-      operation.B.layout in transpose_layouts.keys() and \
-      operation.C.layout in transpose_layouts.keys():
+    if (operation.A.layout in transpose_layouts
+        and operation.B.layout in transpose_layouts
+        and operation.C.layout in transpose_layouts):
 
       instance_layout_A = transpose_layouts[operation.A.layout]
       instance_layout_B = transpose_layouts[operation.B.layout]
@@ -556,7 +548,7 @@ ${compile_guard_end}
       gemm_template = self.gemm_template
     else:
       instance_layout_A, instance_layout_B, instance_layout_C = \
-        (operation.A.layout, operation.B.layout, operation.C.layout)
+          (operation.A.layout, operation.B.layout, operation.C.layout)
 
       gemm_template = self.gemm_template_interleaved
     #
@@ -565,7 +557,7 @@ ${compile_guard_end}
     if isinstance(operation.epilogue_functor, enum.Enum):
 
       epilogue_vector_length = \
-        min(operation.C.alignment * DataTypeSize[operation.C.element], 128) // DataTypeSize[operation.C.element]
+          min(operation.C.alignment * DataTypeSize[operation.C.element], 128) // DataTypeSize[operation.C.element]
 
       values = {
         'epilogue_vector_length': str(epilogue_vector_length),
@@ -1067,7 +1059,9 @@ ${compile_guard_end}
 class EmitGemmConfigurationLibrary:
   def __init__(self, operation_path, configuration_name):
     self.configuration_name = configuration_name
-    self.configuration_path = os.path.join(operation_path, "%s.cu" % configuration_name).replace('\\', '/')
+    self.configuration_path = os.path.join(operation_path,
+                                           f"{configuration_name}.cu").replace(
+                                               '\\', '/')
 
     self.instance_emitter = {
       GemmKind.Gemm: EmitGemmInstance,

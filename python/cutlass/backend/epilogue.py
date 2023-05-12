@@ -325,8 +325,8 @@ class ActivationFunctor:
 class identity(ActivationFunctor):
     tag = "cutlass::epilogue::thread::Identity"
 
-    def numpy(x: np.ndarray):
-        return x
+    def numpy(self):
+        return self
 
 
 # ReLu operator,
@@ -540,13 +540,11 @@ cutlass::epilogue::threadblock::EpilogueVisitorLayerNorm<
             self.element_mean = self.element_output
         if element_layer_norm_compute is None:
             self.element_layer_norm_compute = self.element_compute
-        if shifted_k:
-            self.shifted_k = "true"
-        else:
-            self.shifted_k = "false"
-
+        self.shifted_k = "true" if shifted_k else "false"
         # get epilogue output op
         elementwise_params_type = self.elementwise_functor.epilogue_type
+
+
 
         class _EpilogueVisitorParams(ctypes.Structure):
             _fields_ = [
@@ -576,7 +574,7 @@ cutlass::epilogue::threadblock::EpilogueVisitorLayerNorm<
                 if stream_sync:
                     err, = cudart.cudaDeviceSynchronize()
                     if err != cuda.CUresult.CUDA_SUCCESS:
-                        raise RuntimeError("CUDA Error %s" % str(err))
+                        raise RuntimeError(f"CUDA Error {str(err)}")
 
                 err, = cuda.cuMemcpyDtoH(
                     self.host_variance,
@@ -591,7 +589,8 @@ cutlass::epilogue::threadblock::EpilogueVisitorLayerNorm<
                     cuda.CUdeviceptr(self.ptr_Shifted_K_),
                     self.host_shift_k.size * self.host_shift_k.itemsize)
                 if err != cuda.CUresult.CUDA_SUCCESS:
-                    raise RuntimeError("CUDA Error %s" % str(err))
+                    raise RuntimeError(f"CUDA Error {str(err)}")
+
 
         self.epilogue_type = _EpilogueVisitorParams
 
@@ -868,7 +867,7 @@ using ${instance_name} = cutlass::epilogue::threadblock::VisitorOpRowBroadcast<
             "instance_name": self.instance_name,
             "element_accumulator": DataTypeTag[self.element_accumulator],
             "element_fragment": DataTypeTag[self.element_fragment],
-            "input_tile_iterator": operation.procedural_name() + "_default::Epilogue::OutputTileIterator"
+            "input_tile_iterator": f"{operation.procedural_name()}_default::Epilogue::OutputTileIterator",
         }
         return SubstituteTemplate(self.Template, values)
 
@@ -904,7 +903,7 @@ using ${instance_name} = cutlass::epilogue::threadblock::VisitorOpColumnBroadcas
             "instance_name": self.instance_name,
             "element_accumulator": DataTypeTag[self.element_accumulator],
             "element_fragment": DataTypeTag[self.element_fragment],
-            "input_tile_iterator": operation.procedural_name() + "_default::Epilogue::OutputTileIterator"
+            "input_tile_iterator": f"{operation.procedural_name()}_default::Epilogue::OutputTileIterator",
         }
         return SubstituteTemplate(self.Template, values)
 
@@ -940,7 +939,7 @@ using ${instance_name} = cutlass::epilogue::threadblock::VisitorOpTensorInput<
         values = {
             "instance_name": self.instance_name,
             "element_accumulator": DataTypeTag[self.element_accumulator],
-            "input_tile_iterator": operation.procedural_name() + "_default::Epilogue::OutputTileIterator"
+            "input_tile_iterator": f"{operation.procedural_name()}_default::Epilogue::OutputTileIterator",
         }
         return SubstituteTemplate(self.Template, values)
 
@@ -981,7 +980,7 @@ using ${instance_name} = cutlass::epilogue::threadblock::VisitorOpTensorOutput<
         values = {
             "instance_name": self.instance_name,
             "element_accumulator": DataTypeTag[self.element_accumulator],
-            "output_tile_iterator": operation.procedural_name() + "_default::Epilogue::OutputTileIterator",
+            "output_tile_iterator": f"{operation.procedural_name()}_default::Epilogue::OutputTileIterator",
             "visitor_name": self.visitor.instance_name,
             "visitor": self.visitor.emit(operation),
         }
@@ -1026,13 +1025,21 @@ using ${instance_name} = cutlass::epilogue::threadblock::VisitorOpColumnReductio
     def emit(self, operation):
         values = {
             "instance_name": self.instance_name,
-            "threadblock_shape_m": str(operation.tile_description.threadblock_shape[0]),
-            "threadblock_shape_n": str(operation.tile_description.threadblock_shape[1]),
-            "threadblock_shape_k": str(operation.tile_description.threadblock_shape[2]),
+            "threadblock_shape_m": str(
+                operation.tile_description.threadblock_shape[0]
+            ),
+            "threadblock_shape_n": str(
+                operation.tile_description.threadblock_shape[1]
+            ),
+            "threadblock_shape_k": str(
+                operation.tile_description.threadblock_shape[2]
+            ),
             "element_accumulator": DataTypeTag[self.element_accumulator],
             "element_reduction": DataTypeTag[self.element_reduction],
-            "element_reduction_accumulator": DataTypeTag[self.element_reduction_accumulator],
-            "output_tile_iterator": operation.procedural_name() + "_default::Epilogue::OutputTileIterator",
+            "element_reduction_accumulator": DataTypeTag[
+                self.element_reduction_accumulator
+            ],
+            "output_tile_iterator": f"{operation.procedural_name()}_default::Epilogue::OutputTileIterator",
             "visitor_name": self.visitor.instance_name,
             "visitor": self.visitor.emit(operation),
         }
@@ -1077,13 +1084,21 @@ using ${instance_name} = cutlass::epilogue::threadblock::VisitorOpRowReduction<
     def emit(self, operation):
         values = {
             "instance_name": self.instance_name,
-            "threadblock_shape_m": str(operation.tile_description.threadblock_shape[0]),
-            "threadblock_shape_n": str(operation.tile_description.threadblock_shape[1]),
-            "threadblock_shape_k": str(operation.tile_description.threadblock_shape[2]),
+            "threadblock_shape_m": str(
+                operation.tile_description.threadblock_shape[0]
+            ),
+            "threadblock_shape_n": str(
+                operation.tile_description.threadblock_shape[1]
+            ),
+            "threadblock_shape_k": str(
+                operation.tile_description.threadblock_shape[2]
+            ),
             "element_accumulator": DataTypeTag[self.element_accumulator],
             "element_reduction": DataTypeTag[self.element_reduction],
-            "element_reduction_accumulator": DataTypeTag[self.element_reduction_accumulator],
-            "output_tile_iterator": operation.procedural_name() + "_default::Epilogue::OutputTileIterator",
+            "element_reduction_accumulator": DataTypeTag[
+                self.element_reduction_accumulator
+            ],
+            "output_tile_iterator": f"{operation.procedural_name()}_default::Epilogue::OutputTileIterator",
             "visitor_name": self.visitor.instance_name,
             "visitor": self.visitor.emit(operation),
         }

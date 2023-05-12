@@ -59,28 +59,28 @@ output_dir += "/"
 
 cutlass_deps_root = args.gen_include_cutlass_dir
 if cutlass_deps_root == '':
-    cutlass_deps_root = cutlass_deps_dir + "/include/"
+    cutlass_deps_root = f"{cutlass_deps_dir}/include/"
 cutlass_deps_root +='/'
 
 
 if not os.path.exists(output_dir):
     os.makedirs(output_dir) 
 
-if not os.path.exists(output_dir + "/" + "auto_gen"):
-    os.mkdir(output_dir + "/" + "auto_gen") 
+if not os.path.exists(f"{output_dir}/auto_gen"):
+    os.mkdir(f"{output_dir}/auto_gen") 
 
-if not os.path.exists(output_dir + "/" + "fixed_impl"):
-    os.mkdir(output_dir + "/" + "fixed_impl" )
+if not os.path.exists(f"{output_dir}/fixed_impl"):
+    os.mkdir(f"{output_dir}/fixed_impl")
 
-if not os.path.exists(output_dir + "/" + "sample"):
-    os.mkdir(output_dir + "/" + "sample" )
+if not os.path.exists(f"{output_dir}/sample"):
+    os.mkdir(f"{output_dir}/sample")
 
-if not os.path.exists(output_dir + "/" + "auto_gen" + "/" + "device"):
-    os.mkdir(output_dir + "/" + "auto_gen" + "/" + "device") 
-if not os.path.exists(output_dir + "/" + "auto_gen" + "/" + "kernel"):
-    os.mkdir(output_dir + "/" + "auto_gen" + "/" + "kernel")
-if not os.path.exists(output_dir + "/" + "auto_gen" + "/" + "threadblock"):
-    os.mkdir(output_dir + "/" + "auto_gen" + "/" + "threadblock")
+if not os.path.exists(f"{output_dir}/auto_gen/device"):
+    os.mkdir(f"{output_dir}/auto_gen/device")
+if not os.path.exists(f"{output_dir}/auto_gen/kernel"):
+    os.mkdir(f"{output_dir}/auto_gen/kernel")
+if not os.path.exists(f"{output_dir}/auto_gen/threadblock"):
+    os.mkdir(f"{output_dir}/auto_gen/threadblock")
 
 with open(args.config_file, 'r') as infile:
     gemm_info_dict = json.load(infile)
@@ -90,23 +90,25 @@ fuse_gemm_info = [gemm_info_dict[k] for k in keys]
 
 
 for_cutlass_gen_user_include_header_file = [
-    cutlass_deps_root + "cutlass/epilogue/thread/linear_combination_leaky_relu.h",
-    cutlass_deps_root + "cutlass/epilogue/thread/linear_combination.h",
+    f"{cutlass_deps_root}cutlass/epilogue/thread/linear_combination_leaky_relu.h",
+    f"{cutlass_deps_root}cutlass/epilogue/thread/linear_combination.h",
 ]
 
 for_fused_wrapper = [
-    cutlass_deps_root + "cutlass/epilogue/thread/linear_combination_leaky_relu.h",
-    cutlass_deps_root + "cutlass/epilogue/thread/linear_combination.h",
-    "auto_gen/device/" + gen_name + ".h",
-    cutlass_deps_root + "cutlass/gemm/device/gemm_batched.h",
-    cutlass_deps_root + "cutlass/cutlass.h",
+    f"{cutlass_deps_root}cutlass/epilogue/thread/linear_combination_leaky_relu.h",
+    f"{cutlass_deps_root}cutlass/epilogue/thread/linear_combination.h",
+    f"auto_gen/device/{gen_name}.h",
+    f"{cutlass_deps_root}cutlass/gemm/device/gemm_batched.h",
+    f"{cutlass_deps_root}cutlass/cutlass.h",
 ]
 
 # Copy fixed implementation to the output directory
-fix_impl = replace_fix_impl_header.replace_fix_impl("../fixed_impl/", output_dir +"/fixed_impl/", cutlass_deps_root)
+fix_impl = replace_fix_impl_header.replace_fix_impl(
+    "../fixed_impl/", f"{output_dir}/fixed_impl/", cutlass_deps_root
+)
 fix_impl.gen_code()
 
-auto_gen_output_dir = output_dir + "/auto_gen/"
+auto_gen_output_dir = f"{output_dir}/auto_gen/"
 project_root = ""
 turing_plus = b2b_fused_generator.gen_device(fuse_gemm_info, gen_name, for_cutlass_gen_user_include_header_file, cutlass_deps_root, project_root, auto_gen_output_dir)
 turing_plus.gen_code(75, 'hmma1688', False)
@@ -115,10 +117,10 @@ api = api_generator.gen_one_API(fuse_gemm_info, gen_name, for_fused_wrapper, out
 api.gen_code()
 
 # Generate C++ sample
-os.system("cp ../leaky_bias.h " + output_dir + "/sample/")
-os.system("cp ../utils.h " + output_dir + "/sample/")
+os.system(f"cp ../leaky_bias.h {output_dir}/sample/")
+os.system(f"cp ../utils.h {output_dir}/sample/")
 
-sample_dir = output_dir + "/sample/"
+sample_dir = f"{output_dir}/sample/"
 sample = sample_creater.gen_test(fuse_gemm_info, gen_name, for_cutlass_gen_user_include_header_file, sample_dir)
 sample.gen_cpp_sample()
 

@@ -105,7 +105,7 @@ def transpose_layout(layout: cutlass_bindings.layout):
     elif layout == cutlass_bindings.RowMajor:
         return cutlass_bindings.ColumnMajor
     else:
-        raise ValueError("unsupported Layout {}".format(layout))
+        raise ValueError(f"unsupported Layout {layout}")
 
 
 class GemmArguments2x(ArgumentBase):
@@ -170,9 +170,12 @@ class GemmArguments2x(ArgumentBase):
 
         # if the number of elements in C = problem_size.n
         # C is treated as the bias
-        if hasattr(self, "tensor_c_numel"):
-            if self.tensor_c_numel == self.problem_size.n() and self.problem_size.m() != 1:
-                self.bias = True
+        if (
+            hasattr(self, "tensor_c_numel")
+            and self.tensor_c_numel == self.problem_size.n()
+            and self.problem_size.m() != 1
+        ):
+            self.bias = True
 
         # get the leading dimension
         self.lda = operation.A.layout.packed(self.problem_size.mk()).stride()
@@ -184,7 +187,10 @@ class GemmArguments2x(ArgumentBase):
         if self.bias:
             self.ldc = 0
 
-        if "output_op" in kwargs.keys() and gemm_mode != cutlass_bindings.gemm.Mode.GemmSplitKParallel:
+        if (
+            "output_op" in kwargs
+            and gemm_mode != cutlass_bindings.gemm.Mode.GemmSplitKParallel
+        ):
             self.output_op = kwargs["output_op"]
         else:
             self.output_op = self.operation.epilogue_type(1.0, 0.0)
@@ -192,18 +198,11 @@ class GemmArguments2x(ArgumentBase):
         # get number of slices on k dimension
         self.gemm_mode = gemm_mode
         if gemm_mode in [cutlass_bindings.gemm.Mode.Gemm, cutlass_bindings.gemm.Mode.GemmSplitKParallel]:
-            if "split_k_slices" in kwargs.keys():
-                self.batch_count = kwargs["split_k_slices"]
-            else:
-                self.batch_count = 1
+            self.batch_count = kwargs.get("split_k_slices", 1)
             self.split_k_slices = self.batch_count
 
         if gemm_mode in [cutlass_bindings.gemm.Mode.Batched, cutlass_bindings.gemm.Mode.Array]:
-            if "batch" in kwargs.keys():
-                self.batch_count = kwargs["batch"]
-            else:
-                self.batch_count = 1
-
+            self.batch_count = kwargs.get("batch", 1)
         self.batched_stride_A = self.problem_size.m() * self.problem_size.k()
         self.batched_stride_B = self.problem_size.n() * self.problem_size.k()
         self.batched_stride_C = self.problem_size.m() * self.problem_size.n()
@@ -279,7 +278,7 @@ class GemmArguments2x(ArgumentBase):
         elif operand in ["c", "d"]:
             tensor_coord = problem_size.mn()
         else:
-            raise ValueError("unknown operand: " + operand)
+            raise ValueError(f"unknown operand: {operand}")
 
         layout = tensor_layout.packed(tensor_coord)
 
@@ -406,7 +405,7 @@ class GemmArguments2xStreamK(GemmArguments2x):
         A: "Tensor", B: "Tensor", C: "Tensor", D: "Tensor",
         gemm_mode: "cutlass_bindings.gemm.Mode" = cutlass_bindings.gemm.Mode.Gemm, **kwargs):
         if gemm_mode not in [cutlass_bindings.gemm.Mode.Gemm, cutlass_bindings.gemm.Mode.Batched]:
-            raise Exception("Unsupporged GEMM mode {}.".format(gemm_mode))
+            raise Exception(f"Unsupporged GEMM mode {gemm_mode}.")
 
         super().__init__(operation, problem_size, A, B, C, D, gemm_mode, **kwargs)
 
@@ -416,7 +415,7 @@ class GemmArguments2xStreamK(GemmArguments2x):
         batch_stride_C = self.problem_size.m() * self.problem_size.n()
         batch_stride_D = self.problem_size.m() * self.problem_size.n()
 
-        arguments = self.operation.argument_type(
+        return self.operation.argument_type(
             self.gemm_mode,
             GemmCoord_(self.problem_size),
             self.batch_count,
@@ -429,11 +428,16 @@ class GemmArguments2xStreamK(GemmArguments2x):
             batch_stride_B,
             batch_stride_C,
             batch_stride_D,
-            self.lda, self.ldb, self.ldc, self.ldd,  # strides
-            self.lda, self.ldb, self.ldc, self.ldd,
+            self.lda,
+            self.ldb,
+            self.ldc,
+            self.ldd,  # strides
+            self.lda,
+            self.ldb,
+            self.ldc,
+            self.ldd,
             -1,  # avail_sms
         )
-        return arguments
 
     def initialize(self):
         # get the host and device workspace
@@ -520,7 +524,7 @@ class GemmArguments3x(GemmArguments2x):
         A: "Tensor", B: "Tensor", C: "Tensor", D: "Tensor",
         gemm_mode: "cutlass_bindings.gemm.Mode" = cutlass_bindings.gemm.Mode.Gemm, **kwargs):
         if gemm_mode not in [cutlass_bindings.gemm.Mode.Gemm, cutlass_bindings.gemm.Mode.Batched]:
-            raise Exception("Unsupporged GEMM mode {}.".format(gemm_mode))
+            raise Exception(f"Unsupporged GEMM mode {gemm_mode}.")
 
         super().__init__(operation, problem_size, A, B, C, D, gemm_mode, **kwargs)
 

@@ -70,7 +70,7 @@ class gen_default_Gemm:
 
 
     def gen_include_header(self):
-        code = '''
+        return '''
 /* Auto Generated code - Do not edit.*/
 
 #pragma once
@@ -97,31 +97,44 @@ class gen_default_Gemm:
 
 #include \"../kernel/b2b_gemm.h\"
 #include \"../threadblock/default_b2b_mma.h\"
-'''.format(cutlass_dir=self.cutlass_deps_root)
-        return code
+'''.format(
+            cutlass_dir=self.cutlass_deps_root
+        )
 
     def gen_code(self):
         gen_using = ''
         # Generate default template struct
-        gen_code = gen_ir.gen_template_struct("Default" + self.gen_class_name, self.template_param,"", speicalized = None, set_default=False)
-        
+        gen_code = gen_ir.gen_template_struct(
+            f"Default{self.gen_class_name}",
+            self.template_param,
+            "",
+            speicalized=None,
+            set_default=False,
+        )
+            
 
-        filter_list = []
-        filter_list.append(('Stages', 2))
-        filter_list.append(("OperatorClass", "arch::OpClassTensorOp"))
-        filter_list.append(("ArchTag", "arch::Sm75"))
-
-        for i in range(self.b2b_num):
-            filter_list.append((helper.var_idx("LayoutC", i), "layout::RowMajor"))
-
-
+        filter_list = [
+            ('Stages', 2),
+            ("OperatorClass", "arch::OpClassTensorOp"),
+            ("ArchTag", "arch::Sm75"),
+        ]
+        filter_list.extend(
+            (helper.var_idx("LayoutC", i), "layout::RowMajor")
+            for i in range(self.b2b_num)
+        )
         rtn_template_args, speicalized_template_args = gen_ir.filtered_param(self.template_param, filter_list, keep_= True)
 
 
         B2bMma_code = self.gen_B2bMma(speicalized_template_args)
         epilogue_and_rest_code = self.gen_epilogue()
-       
-        gen_special_code = gen_ir.gen_template_struct("Default" + self.gen_class_name, rtn_template_args, B2bMma_code + epilogue_and_rest_code, speicalized = speicalized_template_args, set_default=False)
+
+        gen_special_code = gen_ir.gen_template_struct(
+            f"Default{self.gen_class_name}",
+            rtn_template_args,
+            B2bMma_code + epilogue_and_rest_code,
+            speicalized=speicalized_template_args,
+            set_default=False,
+        )
 
         code = gen_ir.gen_namespace("cutlass", gen_ir.gen_namespace("gemm", gen_ir.gen_namespace("kernel", gen_code + gen_special_code)))
 
@@ -138,20 +151,24 @@ class gen_Kernel:
         self.project_root = project_root
 
     def gen_include_header(self):
-        code = '''
+        return '''
 #pragma once
 
 #include \"{cutlass_dir}cutlass/cutlass.h\"
 #include \"{cutlass_dir}cutlass/gemm/gemm.h\"
-#include \"{cutlass_dir}cutlass/matrix_coord.h\"\n'''.format(cutlass_dir=self.cutlass_deps_root)  
-        return code
+#include \"{cutlass_dir}cutlass/matrix_coord.h\"\n'''.format(
+            cutlass_dir=self.cutlass_deps_root
+        )
 
     def gen_Params(self):
-        gen_param = ""
-        for i in range(self.b2bnum):
-            gen_param += "    " + helper.var_idx("cutlass::gemm::GemmCoord problem_size_", i) + ";\n"
-        gen_param += "    " + "cutlass::gemm::GemmCoord grid_tiled_shape;\n" 
-        gen_param += "    " + "typename B2bMma::IteratorA0::Params params_A0;\n" 
+        gen_param = "".join(
+            "    "
+            + helper.var_idx("cutlass::gemm::GemmCoord problem_size_", i)
+            + ";\n"
+            for i in range(self.b2bnum)
+        )
+        gen_param += "    " + "cutlass::gemm::GemmCoord grid_tiled_shape;\n"
+        gen_param += "    " + "typename B2bMma::IteratorA0::Params params_A0;\n"
         gen_param += "    " + "typename B2bMma::IteratorA0::TensorRef ref_A0;\n" 
 
         for i in range(self.b2bnum):
@@ -165,7 +182,7 @@ class gen_Kernel:
                 gen_param += "    " + helper.var_idx("typename FusedAddBiasEpilogue", i) + helper.var_idx("::OutputTileIterator::Params params_C", i) + ";\n"
                 gen_param += "    " + helper.var_idx("typename FusedAddBiasEpilogue", i) + helper.var_idx("::OutputTileIterator::TensorRef ref_C", i) + ";\n"
 
-                
+
 
 
         gen_param += "    " + helper.var_idx("typename Epilogue::OutputTileIterator::Params params_D", self.b2bnum - 1) + ";\n"
@@ -181,14 +198,10 @@ class gen_Kernel:
         return gen_param
 
     def gen_Memberfunc(self):
-        code_default = "\nCUTLASS_HOST_DEVICE\n"
-        code_default += "Params()"
-
+        code_default = "\nCUTLASS_HOST_DEVICE\n" + "Params()"
         code_default += " { } \n\n"
 
-        code_construct = "\nCUTLASS_HOST_DEVICE\n"
-        code_construct += "Params(\n"
-
+        code_construct = "\nCUTLASS_HOST_DEVICE\n" + "Params(\n"
         for i in range(self.b2bnum):
             code_construct += "    " + helper.var_idx("cutlass::gemm::GemmCoord const & problem_size_", i) + ",\n"
 
@@ -210,7 +223,7 @@ class gen_Kernel:
         code_construct += "    " + "int batch_count = 1\n"
 
         code_construct += "):\n"
-        
+
         for i in range(self.b2bnum):
             code_construct += "    " + helper.var_idx("problem_size_", i) + helper.var_idx("(problem_size_", i) + "),\n"
 
@@ -238,11 +251,13 @@ class gen_Kernel:
         return code_default + code_construct
 
     def gen_using(self):
-        code_using = ""
-
-        for i in range(self.b2bnum - 1):
-            code_using += "    " + helper.var_idx("using OutputOp", i) +  helper.var_idx(" = typename B2bMma::OutputOp", i) + ";\n"
-
+        code_using = "".join(
+            "    "
+            + helper.var_idx("using OutputOp", i)
+            + helper.var_idx(" = typename B2bMma::OutputOp", i)
+            + ";\n"
+            for i in range(self.b2bnum - 1)
+        )
         code_using += "    " + helper.var_idx("using OutputOp", self.b2bnum - 1) + " = typename Epilogue::OutputOp;\n"
 
         for i in range(self.b2bnum - 1):
@@ -262,14 +277,15 @@ class gen_Kernel:
         return code_using
 
     def gen_can_implement(self):
-        gen_code = ""
-        return gen_code
+        return ""
 
     def gen_operator_and_constr(self):
         ctr_code = "CUTLASS_HOST_DEVICE\n"
         ctr_code += self.gen_class_name + "() { } \n\n"
-        operator_code = "CUTLASS_DEVICE\n"
-        operator_code += "void operator()(Params const &params, SharedStorage &shared_storage) {\n"
+        operator_code = (
+            "CUTLASS_DEVICE\n"
+            + "void operator()(Params const &params, SharedStorage &shared_storage) {\n"
+        )
         operator_code += "    " + "ThreadblockSwizzle threadblock_swizzle;\n"
         operator_code += "    " + "cutlass::gemm::GemmCoord threadblock_tile_offset = threadblock_swizzle.get_tile_offset(params.grid_tiled_shape);\n"
         operator_code += "    " + "int batch_idx = threadblock_tile_offset.k();\n"
@@ -277,7 +293,7 @@ class gen_Kernel:
         operator_code += "    " + "params.grid_tiled_shape.n() <= threadblock_tile_offset.n()) {\n"
         operator_code += "    " + "    " + "return;\n"
         operator_code += "    " + "}\n"
-        
+
         operator_code += "    " + "cutlass::MatrixCoord tb_offset_A0{\n"
         operator_code += "    " + "    " + "threadblock_tile_offset.m() * B2bMma::Shape0::kM,\n"
         operator_code += "    " + "    " + "0\n"
@@ -288,7 +304,7 @@ class gen_Kernel:
             operator_code += "    " + "    " + "0,\n"
             operator_code += "    " + "    " + helper.var_idx("threadblock_tile_offset.n() * B2bMma::Shape", i) + "::kN\n"
             operator_code += "    " + "};\n"
-       
+
         operator_code += "    " + "int thread_idx = threadIdx.x;\n\n"
 
         operator_code += "    " + "MatrixCoord threadblock_offset(\n"
@@ -338,7 +354,7 @@ class gen_Kernel:
             operator_code += "    " + helper.var_idx("OutputOp", i) + helper.var_idx(" output_op_", i) + helper.var_idx("(params.output_op_", i) + ");\n"
 
         operator_code += "    " + "B2bMma b2bMma(shared_storage.main_loop, thread_idx, warp_idx, lane_idx);\n"
-        
+
         operator_code += "    " + "typename B2bMma::FragmentC0 src_accum;\n"
         operator_code += "    " + helper.var_idx("typename B2bMma::FragmentC", self.b2bnum - 1)+ " accumulators;\n"
 
@@ -348,13 +364,13 @@ class gen_Kernel:
 
         for i in range(self.b2bnum):
             operator_code += helper.var_idx("iterator_B", i) + ", "
-        
+
         operator_code += "src_accum"
         if self.b2bnum != 1:
             operator_code += ", "
         for i in range(self.b2bnum - 1):
             operator_code += helper.var_idx("output_op_", i) + ", "
-        
+
         for i in range(self.b2bnum - 1):
             operator_code += helper.var_idx("epilogue_", i) + ", "
 
@@ -368,7 +384,7 @@ class gen_Kernel:
         operator_code += "    " + helper.var_idx("OutputOp", self.b2bnum - 1) + helper.var_idx(" output_op_", self.b2bnum - 1) + helper.var_idx("(params.output_op_", self.b2bnum - 1) + ");\n"
         operator_code += "    " + "threadblock_tile_offset = threadblock_swizzle.get_tile_offset(params.grid_tiled_shape);\n"
 
-        
+
 
         operator_code += "    " + helper.var_idx("typename Epilogue::OutputTileIterator iterator_C", self.b2bnum - 1) + "(\n"
         operator_code += "    " + "    " + helper.var_idx("params.params_C", self.b2bnum - 1) + ",\n"
@@ -408,7 +424,7 @@ class gen_Kernel:
         return ctr_code + operator_code
 
     def gen_include_header(self):
-        code = '''
+        return '''
 #pragma once
 
 #include \"{cutlass_dir}cutlass/cutlass.h\"
@@ -416,16 +432,17 @@ class gen_Kernel:
 #include \"{cutlass_dir}cutlass/gemm/gemm.h\"
 #include \"{cutlass_dir}cutlass/matrix_coord.h\"
 #include \"{cutlass_dir}cutlass/semaphore.h\"
-'''.format(cutlass_dir=self.cutlass_deps_root)
-        return code
+'''.format(
+            cutlass_dir=self.cutlass_deps_root
+        )
     def gen_code(self):
         
-        template_param = []
-        template_param.append(("typename", "B2bMma"))
-        template_param.append(("typename", "Epilogue"))
-        template_param.append(("typename", "ThreadblockSwizzle"))
-        template_param.append((bool, "SplitKSerial"))
-
+        template_param = [
+            ("typename", "B2bMma"),
+            ("typename", "Epilogue"),
+            ("typename", "ThreadblockSwizzle"),
+            (bool, "SplitKSerial"),
+        ]
         code_body = ""
         code_body += self.gen_using()
         code_body += self.gen_operator_and_constr()
@@ -443,7 +460,7 @@ class gen_kernel:
         self.template_param = template_param
 
         self.gen_class_name = "B2bGemm"
-        self.gen_kernel_name = gen_class_name + "Kernel"
+        self.gen_kernel_name = f"{gen_class_name}Kernel"
         self.tempalte_args = []
 
         self.cutlass_deps_root = cutlass_deps_root
@@ -454,22 +471,22 @@ class gen_kernel:
 
         # Include gen_threadBlock
         self.gen_threadBlock = gen_tb.gen_threadblock(template_param, gen_class_name, b2b_num, output_dir, cutlass_deps_root, project_root)
-    
-        self.file_dir = output_dir + "/kernel/"
+
+        self.file_dir = f"{output_dir}/kernel/"
 
     def gen_code(self, first_use_1stage):
 
         default_b2b_gemm = self.gen_default_b2b_gemm.gen_code()
-        
+
         print("[INFO]: Gen kernel code [default_b2b_gemm.h]output Dir: is ", self.file_dir)
 
-        with open(self.file_dir + "default_b2b_gemm.h", "w+") as f:
+        with open(f"{self.file_dir}default_b2b_gemm.h", "w+") as f:
             f.write(default_b2b_gemm)
 
         kernel = self.gen_Kerenl.gen_code()
         print("[INFO]: Gen kernel code [b2b_gemm.h]output Dir: is ", self.file_dir)
 
-        with open(self.file_dir + "b2b_gemm.h", "w+") as f:
+        with open(f"{self.file_dir}b2b_gemm.h", "w+") as f:
             f.write(kernel)
 
         # Call code to gen threadblock

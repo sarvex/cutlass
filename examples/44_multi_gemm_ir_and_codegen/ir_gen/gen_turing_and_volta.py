@@ -37,7 +37,7 @@ class gen_turing_impl:
     def __init__(self,fuse_gemm_info, gen_class_name, user_header_file, output_dir = "../"):
         self.fuse_gemm_info = fuse_gemm_info
         self.class_name = gen_class_name
-        self.gen_class_name = gen_class_name + "_turing_impl"
+        self.gen_class_name = f"{gen_class_name}_turing_impl"
         self.user_header_file = ""
         for header in user_header_file: 
             self.user_header_file += "#include \"" + header + "\"\n"
@@ -47,8 +47,8 @@ class gen_turing_impl:
         self.gen_turing_unfused = gen_volta_turing_fuse_act_impl(fuse_gemm_info, gen_class_name, user_header_file, output_dir)
 
     def gen_using(self):
-        code_using = "using b2b_gemm = typename cutlass::gemm::device::" + self.class_name + "<cutlass::half_t>;"
-        
+        code_using = f"using b2b_gemm = typename cutlass::gemm::device::{self.class_name}<cutlass::half_t>;"
+
         return code_using + "\n"
 
     def gen_initialize(self):
@@ -106,18 +106,17 @@ class gen_turing_impl:
 
 
     def gen_run(self):
-        code = "    " + "gemm_op(stream);\n"
-
-        return code
+        return "    " + "gemm_op(stream);\n"
 
     def gen_wrapper(self):
         code_body = ""
 
-        arg_lists = []
-        arg_lists.append(["int", "M"])
-        arg_lists.append(["int", "K0"])
-        arg_lists.append(["int", "Batch"])
-        arg_lists.append(["void*", helper.var_idx("A", 0)])
+        arg_lists = [
+            ["int", "M"],
+            ["int", "K0"],
+            ["int", "Batch"],
+            ["void*", helper.var_idx("A", 0)],
+        ]
         for i in range(self.b2b_num):
             arg_lists.append(["void*", helper.var_idx("B", i)])
             arg_lists.append(["void*", helper.var_idx("C", i)])
@@ -128,7 +127,7 @@ class gen_turing_impl:
                 arg_tp = arg[0]
                 arg_name = helper.var_idx("Epilogue", i) + "_" +  arg[1]
                 arg_lists.append([arg_tp, arg_name])
-        
+
         if self.b2b_num == 1:
             code_body += self.gen_turing_unfused.gen_using(False)  #False -> Turing, True -> Volta
             code_body += self.gen_turing_unfused.gen_initialize()
@@ -138,9 +137,7 @@ class gen_turing_impl:
             code_body += self.gen_initialize()
             code_body += self.gen_run()
 
-        code = ir.gen_func(self.gen_class_name, arg_lists, code_body)
-
-        return code 
+        return ir.gen_func(self.gen_class_name, arg_lists, code_body) 
 
     def gen_code(self):
 
@@ -150,7 +147,7 @@ class gen_turing_impl:
 class gen_volta_turing_fuse_act_impl:
     def __init__(self, fuse_gemm_info, gen_class_name, user_header_file, output_dir = "../"):
         self.fuse_gemm_info = fuse_gemm_info
-        self.gen_class_name = gen_class_name + "_volta_impl"
+        self.gen_class_name = f"{gen_class_name}_volta_impl"
         self.user_header_file = ""
         for header in user_header_file: 
             self.user_header_file +=  "#include \"" + header + "\"\n"
@@ -159,7 +156,7 @@ class gen_volta_turing_fuse_act_impl:
 
     def perf_tiling(self, layer_mnk):
         mnk = layer_mnk[:]
-        block_tile = mnk[:]  
+        block_tile = mnk[:]
         block_tile[2] = 32 # force the K tile to be 32
 
         # M tile gen
@@ -174,17 +171,9 @@ class gen_volta_turing_fuse_act_impl:
             block_tile[1] = 64
         else : 
             block_tile[1] = 32
-        
-        warp_tile = block_tile[:]          
-        if block_tile[1] == 256:
-            warp_tile[1] = 64
-        elif block_tile[1] == 128:
-            warp_tile[1] = 32
-        elif block_tile[1] == 64:
-            warp_tile[1] = 32
-        else :
-            warp_tile[1] = 32
 
+        warp_tile = block_tile[:]
+        warp_tile[1] = 64 if block_tile[1] == 256 else 32
         warp_tile[0] = 32
 
         return block_tile, warp_tile
@@ -205,28 +194,26 @@ class gen_volta_turing_fuse_act_impl:
             N_align_elements = 8
         elif n_mod_8 == 4:
             N_align_elements = 4
-        elif n_mod_8 == 2 or n_mod_8 == 6:
+        elif n_mod_8 in [2, 6]:
             N_align_elements = 2
 
-        epilogue_str = "cutlass::epilogue::thread::" + cutlass_epilogue_name+ "<" + C_tp + ", " + str(N_align_elements) + ", " + Acc_tp + ", " + Acc_tp + ">"
-
-        return epilogue_str
+        return f"cutlass::epilogue::thread::{cutlass_epilogue_name}<{C_tp}, {N_align_elements}, {Acc_tp}, {Acc_tp}>"
 
     def gen_using(self, volta = True):
         code_using = ""
-        volta_arch = "cutlass::arch::Sm70"
-        volta_tc = "cutlass::gemm::GemmShape<8, 8, 4>"
-
-        turing_arch = "cutlass::arch::Sm75"
-        turing_tc = "cutlass::gemm::GemmShape<16, 8, 8>"
-
         arch = ""
         tc = ""
         if volta:
+            volta_arch = "cutlass::arch::Sm70"
             arch = volta_arch
+            volta_tc = "cutlass::gemm::GemmShape<8, 8, 4>"
+
             tc = volta_tc
         else:
+            turing_arch = "cutlass::arch::Sm75"
             arch = turing_arch
+            turing_tc = "cutlass::gemm::GemmShape<16, 8, 8>"
+
             tc = turing_tc
 
         for i in range(self.b2b_num):
@@ -239,7 +226,7 @@ class gen_volta_turing_fuse_act_impl:
                 ab_ldm = 8
             elif k_mod_8 == 4:
                 ab_ldm = 4
-            elif k_mod_8 == 2 or k_mod_8 == 6:
+            elif k_mod_8 in [2, 6]:
                 ab_ldm = 2
 
             block_tile, warp_tile = self.perf_tiling(self.fuse_gemm_info[i]['mnk'])
@@ -253,15 +240,15 @@ class gen_volta_turing_fuse_act_impl:
             this_gemm_config += "    " + helper.type_2_cutlass_type(self.fuse_gemm_info[i]['C_format']) + ",\n"
             this_gemm_config += "    " + helper.type_2_cutlass_type(self.fuse_gemm_info[i]['Acc_tp']) + ",\n"
             this_gemm_config += "    " + "cutlass::arch::OpClassTensorOp,\n"
-            this_gemm_config += "    " + arch + ",\n"
+            this_gemm_config += f"    {arch}" + ",\n"
             this_gemm_config += "    " + "cutlass::gemm::GemmShape<" + str(block_tile[0]) + ", " + str(block_tile[1]) + ", " + str(block_tile[2]) + ">,\n"
             this_gemm_config += "    " + "cutlass::gemm::GemmShape<" + str(warp_tile[0]) + ", " + str(warp_tile[1]) + ", " + str(warp_tile[2]) + ">,\n"
-            this_gemm_config += "    " + tc + ",\n"
+            this_gemm_config += f"    {tc}" + ",\n"
             this_gemm_config += "    " + self.process_epilogue(helper.get_epilogue_tp(self.fuse_gemm_info[i]), self.fuse_gemm_info[i]['mnk'][1], helper.type_2_cutlass_type(self.fuse_gemm_info[i]['C_tp']), helper.type_2_cutlass_type(self.fuse_gemm_info[i]['Acc_tp'])) + ",\n"
             this_gemm_config += "    " + "cutlass::gemm::threadblock::GemmBatchedIdentityThreadblockSwizzle,\n"
             this_gemm_config += "    " + "2,\n"
-            this_gemm_config += "    " + str(ab_ldm) + ",\n"
-            this_gemm_config += "    " + str(ab_ldm) + ">;\n"
+            this_gemm_config += f"    {ab_ldm}" + ",\n"
+            this_gemm_config += f"    {ab_ldm}" + ">;\n"
 
             code_using += this_gemm_config + "\n"
 
@@ -336,11 +323,12 @@ class gen_volta_turing_fuse_act_impl:
     def gen_wrapper(self):
         code_body = ""
 
-        arg_lists = []
-        arg_lists.append(["int", "M"])
-        arg_lists.append(["int", "K0"])
-        arg_lists.append(["int", "Batch"])
-        arg_lists.append(["void*", helper.var_idx("A", 0)])
+        arg_lists = [
+            ["int", "M"],
+            ["int", "K0"],
+            ["int", "Batch"],
+            ["void*", helper.var_idx("A", 0)],
+        ]
         for i in range(self.b2b_num):
             arg_lists.append(["void*", helper.var_idx("B", i)])
             arg_lists.append(["void*", helper.var_idx("C", i)])
@@ -355,9 +343,7 @@ class gen_volta_turing_fuse_act_impl:
         code_body += self.gen_initialize()
         code_body += self.gen_run()
 
-        code = ir.gen_func(self.gen_class_name, arg_lists, code_body)
-
-        return code 
+        return ir.gen_func(self.gen_class_name, arg_lists, code_body) 
 
     def gen_code(self):
         code = self.gen_wrapper()
@@ -378,11 +364,10 @@ class gen_one_API:
         self.gen_turing = gen_turing_impl(fuse_gemm_info, gen_class_name, user_header_file, output_dir)
 
     def gen_CUTLASS_irrelevant_API(self):
-        code = ""
-        code += "#include <cuda_runtime.h>\n"
+        code = "" + "#include <cuda_runtime.h>\n"
         code += "#include <assert.h>\n"
 
-        param_name = "Fused" + str(self.b2b_num) + "xGemm_"
+        param_name = f"Fused{str(self.b2b_num)}xGemm_"
         for i in range(self.b2b_num):
             param_name += str(self.fuse_gemm_info[i]['mnk'][1]) + "_"
         param_name += "Params"
@@ -399,22 +384,21 @@ class gen_one_API:
             for arg in epilogue_args:
                 arg_tp = arg[0]
                 arg_name = helper.var_idx("Epilogue", i) + "_" +  arg[1]
-                params += "    " + arg_tp + " " + arg_name + ";\n"
+                params += f"    {arg_tp} {arg_name}" + ";\n"
             params += "    " + "void* " + helper.var_idx("D", i) + ";\n"
         code += ir.gen_struct(param_name, params)
-        code += "using Param = " + param_name + ";\n"
+        code += f"using Param = {param_name}" + ";\n"
         code += "void one_api( const  Param & param, int sm, cudaStream_t stream);\n"
 
-        
+
         return code
 
     def gen_one_api(self):
-        code = ""
-        code += "/* Auto Generated code - Do not edit.*/\n"
+        code = "" + "/* Auto Generated code - Do not edit.*/\n"
         code += "#include \"cutlass_irrelevant.h\"\n"
         code += "#include \"api.h\"\n"
         code += "void one_api( const  Param & param, int sm, cudaStream_t stream) {\n"
-        
+
         code += "    " + "if (sm == 70) \n"
         code += "    " + "    " + self.gen_class_name + "_volta_impl(param.M, param.K0, param.Batch, const_cast<void*>(param.A0), "
         for i in range(self.b2b_num):
@@ -424,7 +408,7 @@ class gen_one_API:
             epilogue_args = helper.get_epilogue_args(self.fuse_gemm_info[i])
             for arg in epilogue_args:
                 arg_name = helper.var_idx("Epilogue", i) + "_" +  arg[1]
-                code += "param." + arg_name + ", "
+                code += f"param.{arg_name}, "
         code += "stream);\n"
         code += "    " + "else if(sm >= 75) \n"
         code += "    " + "    " + self.gen_class_name + "_turing_impl(param.M, param.K0, param.Batch, const_cast<void*>(param.A0), "
@@ -435,7 +419,7 @@ class gen_one_API:
             epilogue_args = helper.get_epilogue_args(self.fuse_gemm_info[i])
             for arg in epilogue_args:
                 arg_name = helper.var_idx("Epilogue", i) + "_" +  arg[1]
-                code += "param." + arg_name + ", "
+                code += f"param.{arg_name}, "
         code += "stream);\n"
         code += "    " + "else assert(0);\n"
         code += "}\n"
@@ -448,9 +432,9 @@ class gen_one_API:
         cutlass_irrelevant_code = self.gen_CUTLASS_irrelevant_API()
 
         one_api_code = self.gen_one_api()
-        with open(self.output_dir + "one_api.cu", "w+") as f:
+        with open(f"{self.output_dir}one_api.cu", "w+") as f:
             f.write(one_api_code)
- 
+
         helper.write_2_headfile("cutlass_irrelevant.h", self.output_dir, cutlass_irrelevant_code)
 
         helper.write_2_headfile("api.h", self.output_dir, self.user_header_file + "\n" +  turing_code + volta_code)

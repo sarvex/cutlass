@@ -50,7 +50,7 @@ def check_cuda_errors(result: list):
     # `result` is of the format : (cudaError_t, result...)
     err = result[0]
     if err.value:
-        raise RuntimeError("CUDA error: {}".format(cudart.cudaGetErrorName(err)))
+        raise RuntimeError(f"CUDA error: {cudart.cudaGetErrorName(err)}")
 
     if len(result) == 1:
         return None

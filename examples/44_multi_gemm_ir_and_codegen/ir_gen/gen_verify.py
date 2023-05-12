@@ -39,7 +39,7 @@ import gen_turing_and_volta as gen_basic
 class gen_verify:
     def __init__(self, fuse_gemm_info, gen_class_name, user_header_file, output_dir = "../"):
         self.fuse_gemm_info = fuse_gemm_info
-        self.name = gen_class_name + "_verify"
+        self.name = f"{gen_class_name}_verify"
         self.b2b_num = len(fuse_gemm_info)
         self.params = []
         self.user_header_file = ""
@@ -80,7 +80,7 @@ class gen_verify:
         code = ""
         if declartion:
             for param in self.params:
-                code += param[0] + " " + param[1] + ";\n"
+                code += f"{param[0]} {param[1]}" + ";\n"
 
         return code
 

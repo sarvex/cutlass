@@ -24,7 +24,7 @@ def CudaToolkitVersionSatisfies(semantic_ver_string, major, minor, patch = 0):
 
   # Update cuda_version based on parsed string
   if semantic_ver_string != '':
-    for i, x in enumerate([int(x) for x in semantic_ver_string.split('.')]):
+    for i, x in enumerate(int(x) for x in semantic_ver_string.split('.')):
       if i < len(cuda_version):
         cuda_version[i] = x
       else:
@@ -256,6 +256,8 @@ def CreateRankKOperator(manifest, layouts, fill_modes, tile_descriptions, data_t
     tile_descriptions = [tile_descriptions[0],]
     alignment_constraints = [alignment_constraints[0],]
 
+  alignment_c = 1 # Alignment only applies to A in SYRK
+
   for layout in layouts:
     for fill_mode in fill_modes:
       for tile_description in tile_descriptions:
@@ -267,8 +269,6 @@ def CreateRankKOperator(manifest, layouts, fill_modes, tile_descriptions, data_t
           # HERK supported layouts (RowMajor + conj, ColumnMajor)
           if blas_mode == BlasMode.hermitian and layout[0] == LayoutType.RowMajor:
             complex_transform = ComplexTransform.conj
-
-          alignment_c = 1 # Alignment only applies to A in SYRK
 
           A = TensorDescription(element_a, layout[0], alignment, complex_transform)
           C = SymmetricTensorDescription(element_c, layout[1], fill_mode, alignment_c)
@@ -343,6 +343,7 @@ def CreateSymmOperator(manifest, layouts, side_modes, fill_modes, tile_descripti
     tile_descriptions = [tile_descriptions[0],]
     alignment_constraints = [alignment_constraints[0],]
 
+  alignment_a = 1 # No vectorized access for the triangular matrix
   for layout in layouts:
     for side_mode in side_modes:
       for fill_mode in fill_modes:
@@ -352,7 +353,6 @@ def CreateSymmOperator(manifest, layouts, side_modes, fill_modes, tile_descripti
             # SYMM supported layouts (RowMajor, ColumnMajor) with no conjugation
             complex_transform = ComplexTransform.none
 
-            alignment_a = 1 # No vectorized access for the triangular matrix
             alignment_c = min(8, alignment)
 
             A = SymmetricTensorDescription(element_a, layout[0], fill_mode, alignment_a, complex_transform, side_mode)
@@ -702,9 +702,9 @@ def CreateDepthwiseConv2dOperator(manifest, layout, tile_descriptions, data_type
                 continue
               stride_support = StrideSupport.Fixed
 
-          if iterator_algorithm == IteratorAlgorithm.Optimized:
-              if tile.stride != [-1, -1] or tile.dilation != [-1,-1]:
-                continue
+          if iterator_algorithm == IteratorAlgorithm.Optimized and (
+              tile.stride != [-1, -1] or tile.dilation != [-1, -1]):
+            continue
           new_operation = Conv2dOperation(ConvKind.Fprop,
                                           iterator_algorithm,
                                           tile.minimum_compute_capability,
@@ -1509,10 +1509,7 @@ def GenerateSM75_TensorOp_8816_TN(manifest, cuda_version):
         data_type_mixed, alignment_constraints_small_channels, [ConvKind.Fprop], EpilogueFunctor.LinearCombinationClamp)
 
       for op in operations:
-        if op.tile_description.threadblock_shape[1] >= 128:
-          op.C.alignment = 16
-        else:
-          op.C.alignment = 8
+        op.C.alignment = 16 if op.tile_description.threadblock_shape[1] >= 128 else 8
 
 #
 
@@ -2189,10 +2186,7 @@ def GenerateSM80_TensorOp_16832_TN(manifest, cuda_version):
       data_type_mixed, alignment_constraints_small_channels, [ConvKind.Fprop], EpilogueFunctor.LinearCombinationClamp)
 
     for op in operations:
-      if op.tile_description.threadblock_shape[1] >= 128:
-        op.C.alignment = 16
-      else:
-        op.C.alignment = 8
+      op.C.alignment = 16 if op.tile_description.threadblock_shape[1] >= 128 else 8
 
 #
 
@@ -2245,10 +2239,7 @@ def GenerateSM80_SparseTensorOp_16864_TN(manifest, cuda_version):
     data_type_mixed, alignment_constraints, None, EpilogueFunctor.LinearCombinationClamp)
 
   for op in operations:
-    if op.tile_description.threadblock_shape[1] >= 128:
-      op.C.alignment = 16
-    else:
-      op.C.alignment = 8
+    op.C.alignment = 16 if op.tile_description.threadblock_shape[1] >= 128 else 8
 #
 
 #

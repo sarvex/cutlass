@@ -40,14 +40,15 @@ class Conv3dOperation:
 
     if self.tile_description.math_instruction.opcode_class == OpcodeClass.TensorOp:
       inst_shape = "%d%d%d" % tuple(self.tile_description.math_instruction.instruction_shape)
-      if self.tile_description.math_instruction.element_a != self.A.element and \
-        self.tile_description.math_instruction.element_a != self.tile_description.math_instruction.element_accumulator:
+      if self.tile_description.math_instruction.element_a not in [
+          self.A.element,
+          self.tile_description.math_instruction.element_accumulator,
+      ]:
         intermediate_type = DataTypeNames[self.tile_description.math_instruction.element_a]
     else:
       inst_shape = ''
 
-    return "%s%s%s%s3d_%s" % (ShortDataTypeNames[self.tile_description.math_instruction.element_accumulator], \
-      inst_shape, intermediate_type, ConvKindNames[self.conv_kind], IteratorAlgorithmNames[self.iterator_algorithm])
+    return f"{ShortDataTypeNames[self.tile_description.math_instruction.element_accumulator]}{inst_shape}{intermediate_type}{ConvKindNames[self.conv_kind]}3d_{IteratorAlgorithmNames[self.iterator_algorithm]}"
 
   #
   def extended_name(self):
@@ -215,7 +216,8 @@ def GenerateConv3dTensorOp(manifest, tile_descriptions, min_cc, align = 128):
 class EmitConv3dConfigurationLibrary:
   def __init__(self, operation_path, configuration_name):
     self.configuration_name = configuration_name
-    self.configuration_path = os.path.join(operation_path, "%s.cu" % configuration_name)
+    self.configuration_path = os.path.join(operation_path,
+                                           f"{configuration_name}.cu")
 
     self.instance_emitter = EmitConv3dInstance()
 

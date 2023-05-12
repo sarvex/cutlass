@@ -34,12 +34,12 @@
 Utility functions for converting between frontend datatypes and CUTLASS datatypes
 """
 
+
 import cutlass_bindings
 
 from cutlass.backend.utils.software import CheckPackages
 
-numpy_available = CheckPackages().check_numpy()
-if numpy_available:
+if numpy_available := CheckPackages().check_numpy():
     import numpy as np
 
     numpy_to_cutlass_dict = {
@@ -57,8 +57,7 @@ if numpy_available:
 
 
 def numpy_to_cutlass(inp):
-    numpy_available = CheckPackages().check_numpy()
-    if numpy_available:
+    if numpy_available := CheckPackages().check_numpy():
         return numpy_to_cutlass_dict.get(inp, None)
 
 
@@ -74,8 +73,7 @@ if cupy_available:
 
 
 def cupy_to_cutlass(inp):
-    cupy_available = CheckPackages().check_cupy()
-    if cupy_available:
+    if cupy_available := CheckPackages().check_cupy():
         return cupy_to_cutlass_dict.get(inp, None)
 
 
@@ -108,9 +106,8 @@ except ImportError:
 
 
 def bfloat16_to_cutlass(inp):
-    if bfloat16_available:
-        if inp == bfloat16.bfloat16:
-            return cutlass_bindings.bfloat16
+    if bfloat16_available and inp == bfloat16.bfloat16:
+        return cutlass_bindings.bfloat16
 
 
 def to_cutlass(inp):
@@ -124,6 +121,4 @@ def to_cutlass(inp):
         if out is not None:
             return out
 
-    raise Exception(
-        "No available conversion from type {} to a CUTLASS type.".format(inp)
-    )
+    raise Exception(f"No available conversion from type {inp} to a CUTLASS type.")

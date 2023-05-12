@@ -33,6 +33,7 @@
 Basic example of using the CUTLASS Python interface to run a GEMM
 """
 
+
 import argparse
 import numpy as np
 import sys
@@ -59,9 +60,15 @@ cc = device_cc()
 assert cc >= 70, "The CUTLASS Python GEMM example requires compute capability greater than or equal to 70."
 
 alignment = 8
-assert args.m % alignment == 0, "M dimension of size {} is not divisible by alignment of {}".format(args.m, alignment)
-assert args.n % alignment == 0, "N dimension of size {} is not divisible by alignment of {}".format(args.n, alignment)
-assert args.k % alignment == 0, "K dimension of size {} is not divisible by alignment of {}".format(args.k, alignment)
+assert (
+    args.m % alignment == 0
+), f"M dimension of size {args.m} is not divisible by alignment of {alignment}"
+assert (
+    args.n % alignment == 0
+), f"N dimension of size {args.n} is not divisible by alignment of {alignment}"
+assert (
+    args.k % alignment == 0
+), f"K dimension of size {args.k} is not divisible by alignment of {alignment}"
 
 np.random.seed(0)
 

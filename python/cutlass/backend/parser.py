@@ -105,7 +105,7 @@ class UnaryNode:
                 raise TypeError
         else:
             raise TypeError
-        self.tag = "Unary" + self.op + str(UnaryNode.cnt)
+        self.tag = f"Unary{self.op}{str(UnaryNode.cnt)}"
         self.id = self.op + str(UnaryNode.cnt)
         self.args = args
         UnaryNode.cnt += 1
@@ -153,14 +153,14 @@ class BinOpNode:
         node,
     ) -> None:
         self.op = operators[type(node.op)]
-        self.tag = "Binary" + self.op + str(BinOpNode.cnt)
+        self.tag = f"Binary{self.op}{str(BinOpNode.cnt)}"
         self.id = self.op + str(BinOpNode.cnt)
         self.args = None
         BinOpNode.cnt += 1
 
         self.type = "tensor"
 
-        self.epilogue_op = getattr(backend, "Vector" + self.op)(element_compute)
+        self.epilogue_op = getattr(backend, f"Vector{self.op}")(element_compute)
 
         # data types
         self.element_accumulator = element_accumulator
@@ -197,7 +197,7 @@ class ScalarInputNode(NameNode):
     # Concept: scalar
     def __init__(self, node) -> None:
         super().__init__(node)
-        self.tag = "Scalar:" + self.tag
+        self.tag = f"Scalar:{self.tag}"
         self.type = "scalar"
 
 
@@ -210,7 +210,7 @@ class AccumulatorNode(NameNode):
         node,
     ) -> None:
         super().__init__(node)
-        self.tag = "Accum:" + self.tag
+        self.tag = f"Accum:{self.tag}"
         self.type = "tensor"
 
         self.element_accumulator = element_accumulator
@@ -230,7 +230,7 @@ class TensorInputNode(NameNode):
     # Concept: VisitorOpTensorInput
     def __init__(self, element_accumulator, node) -> None:
         super().__init__(node)
-        self.tag = "TensorInput:" + self.tag
+        self.tag = f"TensorInput:{self.tag}"
         self.type = "tensor"
         self.element_accumulator = element_accumulator
 
@@ -239,7 +239,7 @@ class TensorInputNode(NameNode):
 
     def get_argument(self, visitor_args, kwargs):
         self.argument = self.epilogue_node.argument_type(
-            kwargs[self.id + "_ptr"],
+            kwargs[f"{self.id}_ptr"],
             kwargs["problem_size"][1],
             kwargs["problem_size"][0] * kwargs["problem_size"][1],
         )
@@ -255,7 +255,7 @@ class RowBroadcastNode(NameNode):
     ) -> None:
         super().__init__(node)
         #
-        self.tag = "RowBroadcast:" + self.tag
+        self.tag = f"RowBroadcast:{self.tag}"
         self.type = "tensor"
         self.element_accumulator = element_accumulator
         self.element_fragment = element_fragment
@@ -268,8 +268,7 @@ class RowBroadcastNode(NameNode):
 
     def get_argument(self, visitor_args, kwargs):
         self.argument = self.epilogue_node.argument_type(
-            kwargs[self.id + "_ptr"],
-            kwargs["problem_size"][1],
+            kwargs[f"{self.id}_ptr"], kwargs["problem_size"][1]
         )
 
 
@@ -282,7 +281,7 @@ class ColumnBroadcastNode(NameNode):
         node,
     ) -> None:
         super().__init__(node)
-        self.tag = "ColumnBroadcast:" + self.tag
+        self.tag = f"ColumnBroadcast:{self.tag}"
         self.type = "tensor"
         self.element_accumulator = element_accumulator
         self.element_fragment = element_fragment
@@ -295,8 +294,7 @@ class ColumnBroadcastNode(NameNode):
 
     def get_argument(self, visitor_args, kwargs):
         self.argument = self.epilogue_node.argument_type(
-            kwargs[self.id + "_ptr"],
-            kwargs["problem_size"][0],
+            kwargs[f"{self.id}_ptr"], kwargs["problem_size"][0]
         )
 
 
@@ -304,7 +302,7 @@ class TensorOutputNode(NameNode):
     # Concept: VisitorOpTensorOutput
     def __init__(self, element_accumulator, node) -> None:
         super().__init__(node)
-        self.tag = "TensorOutput:" + self.tag
+        self.tag = f"TensorOutput:{self.tag}"
         self.type = "tensor"
         self.element_accumulator = element_accumulator
 
@@ -313,7 +311,7 @@ class TensorOutputNode(NameNode):
 
     def get_argument(self, visitor_args, kwargs):
         self.argument = self.epilogue_node.argument_type(
-            kwargs[self.id + "_ptr"],
+            kwargs[f"{self.id}_ptr"],
             kwargs["problem_size"][1],
             *visitor_args,
             kwargs["problem_size"][0] * kwargs["problem_size"][1],
@@ -332,7 +330,7 @@ class RowReductionNode:
     ) -> None:
         #
         self.id = id
-        self.tag = "RowReduction:" + self.id
+        self.tag = f"RowReduction:{self.id}"
         self.type = "tensor"
         self.element_accumulator = element_accumulator
         self.element_reduction = element_reduction
@@ -352,7 +350,7 @@ class RowReductionNode:
 
     def get_argument(self, visitor_args, kwargs):
         self.argument = self.epilogue_node.argument_type(
-            kwargs[self.id + "_ptr"],
+            kwargs[f"{self.id}_ptr"],
             *visitor_args,
             self.get_batch_stride(kwargs["problem_size"]),
         )
@@ -370,7 +368,7 @@ class ColumnReductionNode:
     ) -> None:
         #
         self.id = id
-        self.tag = "ColumnReduction:" + self.id
+        self.tag = f"ColumnReduction:{self.id}"
         self.type = "tensor"
         self.element_accumulator = element_accumulator
         self.element_reduction = element_reduction
@@ -390,7 +388,7 @@ class ColumnReductionNode:
 
     def get_argument(self, visitor_args, kwargs):
         self.argument = self.epilogue_node.argument_type(
-            kwargs[self.id + "_ptr"],
+            kwargs[f"{self.id}_ptr"],
             *visitor_args,
             self.get_batch_stride(kwargs["problem_size"]),
         )
@@ -450,37 +448,34 @@ class EpilogueAST(ast.NodeVisitor):
                     self.elements_per_access,
                     node,
                 )
-            else:
-                # for input nodes
-                if node.id in self.input_args.keys():
-                    type = self.input_args[node.id][0]
-                    if type == "tensor":
-                        name_node = TensorInputNode(
-                            self.element_accumulator,
-                            node,
-                        )
-                    elif type == "row":
-                        name_node = RowBroadcastNode(
-                            self.element_accumulator,
-                            self.element_compute,
-                            node,
-                        )
-                    elif type == "column":
-                        name_node = ColumnBroadcastNode(
-                            self.element_accumulator,
-                            self.element_compute,
-                            node,
-                        )
-                    elif type == "scalar":
-                        name_node = ScalarInputNode(node)
-                    else:
-                        raise ValueError(type)
-                # for output nodes
-                else:
-                    name_node = TensorOutputNode(
+            elif node.id in self.input_args.keys():
+                type = self.input_args[node.id][0]
+                if type == "tensor":
+                    name_node = TensorInputNode(
                         self.element_accumulator,
                         node,
                     )
+                elif type == "row":
+                    name_node = RowBroadcastNode(
+                        self.element_accumulator,
+                        self.element_compute,
+                        node,
+                    )
+                elif type == "column":
+                    name_node = ColumnBroadcastNode(
+                        self.element_accumulator,
+                        self.element_compute,
+                        node,
+                    )
+                elif type == "scalar":
+                    name_node = ScalarInputNode(node)
+                else:
+                    raise ValueError(type)
+            else:
+                name_node = TensorOutputNode(
+                    self.element_accumulator,
+                    node,
+                )
             self.epilogue_tree.create_node(
                 name_node.tag,
                 name_node.id,
@@ -514,17 +509,16 @@ class EpilogueAST(ast.NodeVisitor):
                 data=name_node,
             )
             self.stack.append(name_node.id)
-        else:
-            if (
+        elif (
                 node.targets[0].id in self.returns
                 or node.targets[0].id in self.reduction_source.keys()
             ):
-                self.stack.append(node.targets[0].id)
-            else:
-                self.stack.append(
-                    pre_assign_node.predecessor(self.epilogue_tree.identifier)
-                )
-                self.epilogue_tree.remove_node(node.targets[0].id)
+            self.stack.append(node.targets[0].id)
+        else:
+            self.stack.append(
+                pre_assign_node.predecessor(self.epilogue_tree.identifier)
+            )
+            self.epilogue_tree.remove_node(node.targets[0].id)
 
         # get child tag
         self.visit(node.value)
@@ -710,19 +704,19 @@ class EpilogueAST(ast.NodeVisitor):
 
     def pass_inject_epilogue_op(self, tree, nid):
         node = tree.get_node(nid)
-        visitors = []
-        for child in node.successors(tree.identifier):
-            visitors.append(self.pass_inject_epilogue_op(tree, child))
-
+        visitors = [
+            self.pass_inject_epilogue_op(tree, child)
+            for child in node.successors(tree.identifier)
+        ]
         node.data.get_epilogue_node(visitors)
         return node.data.epilogue_node
 
     def get_arguments(self, tree, nid, kwargs):
         node = tree.get_node(nid)
-        visitor_args = []
-        for child in node.successors(tree.identifier):
-            visitor_args.append(self.get_arguments(tree, child, kwargs))
-
+        visitor_args = [
+            self.get_arguments(tree, child, kwargs)
+            for child in node.successors(tree.identifier)
+        ]
         node.data.get_argument(visitor_args, kwargs)
         return node.data.argument
 
@@ -751,7 +745,6 @@ using ${operation_name}_EpilogueVisitor = cutlass::epilogue::threadblock::Epilog
         self.element_compute = element_compute
         self.element_output = element_output
         self.elementwise_functor = elementwise_functor
-        pass
 
     def initialize(self):
         function = EpilogueAST(
@@ -772,6 +765,8 @@ using ${operation_name}_EpilogueVisitor = cutlass::epilogue::threadblock::Epilog
         visitor = self.tree.get_node(self.tree.root).data.epilogue_node
         self.visitor = visitor
 
+
+
         class _Argument(ctypes.Structure):
             _fields_ = [
                 (
@@ -788,55 +783,32 @@ using ${operation_name}_EpilogueVisitor = cutlass::epilogue::threadblock::Epilog
                         continue
                     if function.input_args[input_key][0] == "scalar":
                         continue
-                    # tensor input
-                    else:
-                        setattr(
-                            self,
-                            "buffer_tensor_" + input_key,
-                            NumpyFrontend.argument(
-                                kwargs[input_key],
-                                False,
-                            ),
-                        )
-                        setattr(
-                            self,
-                            input_key + "_ptr",
-                            int(
-                                getattr(
-                                    self,
-                                    "buffer_tensor_" + input_key,
-                                ).ptr
-                            ),
-                        )
-                        _kwargs[input_key + "_ptr"] = getattr(
-                            self,
-                            input_key + "_ptr",
-                        )
+                    setattr(
+                        self,
+                        f"buffer_tensor_{input_key}",
+                        NumpyFrontend.argument(
+                            kwargs[input_key],
+                            False,
+                        ),
+                    )
+                    setattr(
+                        self,
+                        f"{input_key}_ptr",
+                        int(getattr(self, f"buffer_tensor_{input_key}").ptr),
+                    )
+                    _kwargs[f"{input_key}_ptr"] = getattr(self, f"{input_key}_ptr")
                 # process the return args
                 for ret in function.returns:
                     setattr(
                         self,
-                        "buffer_tensor_" + ret,
+                        f"buffer_tensor_{ret}",
                         NumpyFrontend.argument(kwargs[ret], True),
                     )
-                    setattr(
-                        self,
-                        ret + "_ptr",
-                        int(
-                            getattr(
-                                self,
-                                "buffer_tensor_" + ret,
-                            ).ptr
-                        ),
-                    )
-                    _kwargs[ret + "_ptr"] = getattr(self, ret + "_ptr")
-                    setattr(
-                        self,
-                        "host_tensor_" + ret,
-                        kwargs[ret],
-                    )
+                    setattr(self, f"{ret}_ptr", int(getattr(self, f"buffer_tensor_{ret}").ptr))
+                    _kwargs[f"{ret}_ptr"] = getattr(self, f"{ret}_ptr")
+                    setattr(self, f"host_tensor_{ret}", kwargs[ret])
 
-                _kwargs.update(kwargs)
+                _kwargs |= kwargs
                 function.get_arguments(tree, tree.root, _kwargs)
                 self.visitor_arg = tree.get_node(tree.root).data.argument
 
@@ -844,27 +816,20 @@ using ${operation_name}_EpilogueVisitor = cutlass::epilogue::threadblock::Epilog
                 if stream_sync:
                     (err,) = cudart.cudaDeviceSynchronize()
                     if err != cuda.CUresult.CUDA_SUCCESS:
-                        raise RuntimeError("CUDA Error %s" % str(err))
+                        raise RuntimeError(f"CUDA Error {str(err)}")
 
                 for ret in function.returns:
                     (err,) = cuda.cuMemcpyDtoH(
-                        getattr(
-                            self,
-                            "host_tensor_" + ret,
+                        getattr(self, f"host_tensor_{ret}"),
+                        cuda.CUdeviceptr(getattr(self, f"{ret}_ptr")),
+                        (
+                            getattr(self, f"host_tensor_{ret}").size
+                            * getattr(self, f"host_tensor_{ret}").itemsize
                         ),
-                        cuda.CUdeviceptr(getattr(self, ret + "_ptr")),
-                        getattr(
-                            self,
-                            "host_tensor_" + ret,
-                        ).size
-                        * getattr(
-                            self,
-                            "host_tensor_" + ret,
-                        ).itemsize,
                     )
                 if err != cuda.CUresult.CUDA_SUCCESS:
-                    raise RuntimeError("CUDA Error %s" % str(err))
-                pass
+                    raise RuntimeError(f"CUDA Error {str(err)}")
+
 
         self.epilogue_type = _Argument
 

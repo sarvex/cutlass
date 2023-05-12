@@ -40,7 +40,7 @@ class PipedSubprocess:
 
     def write(self, *args) -> None:
         for a in args:
-            self.subp.stdin.write(str(a) + " ")
+            self.subp.stdin.write(f"{str(a)} ")
 
     def writeTensor(self, tensor: torch.Tensor, name: str, stride_names: List[str]) -> None:
         print(f"Py ->C++: {TORCH_DTYPE_NAME[tensor.dtype]}:{name}")

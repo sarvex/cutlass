@@ -91,7 +91,7 @@ class TestbedGrouped:
         elif type == cutlass_bindings.int8:
             return np.int8
         else:
-            raise ValueError("unsupported type: %s" % ShortDataTypeNames[type])
+            raise ValueError(f"unsupported type: {ShortDataTypeNames[type]}")
 
     def uniform_init(self, size, dtype):
         if dtype in [np.float32, np.float16, bfloat16, np.float64]:
@@ -129,23 +129,23 @@ class TestbedGrouped:
 
         for i in range(problem_count):
             if self.dtype_A == np.int8:
-                if i == 0:
-                    problem_size = cutlass_bindings.gemm.GemmCoord(48, 16, 32)
-                else:
-                    problem_size = cutlass_bindings.gemm.GemmCoord(
+                problem_size = (
+                    cutlass_bindings.gemm.GemmCoord(48, 16, 32)
+                    if i == 0
+                    else cutlass_bindings.gemm.GemmCoord(
                         16 * np.random.randint(0, 64) + 48,
                         16 * np.random.randint(0, 64) + 48,
                         16 * np.random.randint(0, 64) + 48,
                     )
+                )
+            elif i == 0:
+                problem_size = cutlass_bindings.gemm.GemmCoord(48, 16, 8)
             else:
-                if i == 0:
-                    problem_size = cutlass_bindings.gemm.GemmCoord(48, 16, 8)
-                else:
-                    problem_size = cutlass_bindings.gemm.GemmCoord(
-                        8 * np.random.randint(0, 64) + 24,
-                        8 * np.random.randint(0, 64) + 24,
-                        8 * np.random.randint(0, 64) + 24,
-                    )
+                problem_size = cutlass_bindings.gemm.GemmCoord(
+                    8 * np.random.randint(0, 64) + 24,
+                    8 * np.random.randint(0, 64) + 24,
+                    8 * np.random.randint(0, 64) + 24,
+                )
 
             tensor_As.append(
                 self.uniform_init(

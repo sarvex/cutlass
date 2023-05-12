@@ -85,16 +85,16 @@ class ReferenceModule:
                 B_row = np.transpose(B_col, axes=(0, 2, 1))
 
             if self.layout_C == cutlass_bindings.RowMajor:
-                if bias:
-                    C_row = np.reshape(C, newshape=(batch, 1, N))
-                else:
-                    C_row = np.reshape(C, newshape=(batch, M, N))
+                C_row = (
+                    np.reshape(C, newshape=(batch, 1, N))
+                    if bias
+                    else np.reshape(C, newshape=(batch, M, N))
+                )
+            elif bias:
+                C_row = np.reshape(C, newshape=(batch, M, 1))
             else:
-                if bias:
-                    C_row = np.reshape(C, newshape=(batch, M, 1))
-                else:
-                    C_col = np.reshape(C, newshape=(batch, N, M))
-                    C_row = np.transpose(C_col, axes=(0, 2, 1))
+                C_col = np.reshape(C, newshape=(batch, N, M))
+                C_row = np.transpose(C_col, axes=(0, 2, 1))
 
             if A_row.dtype == bfloat16:
                 # numpy's einsum doesn't support bfloat16
@@ -232,10 +232,7 @@ if torch_available:
                         B_torch_nchw = torch.permute(B_nhwc, (0, 3, 1, 2))
 
                     if self.layout_C == cutlass_bindings.TensorNHWC:
-                        if bias:
-                            C_nhwc = C.view((1, 1, 1, c))
-                        else:
-                            C_nhwc = C.view((k, r, s, c))
+                        C_nhwc = C.view((1, 1, 1, c)) if bias else C.view((k, r, s, c))
                         C_torch_nchw = torch.permute(C_nhwc, (0, 3, 1, 2))
                 elif self.kind == cutlass_bindings.conv.Operator.dgrad:
                     if self.layout_A == cutlass_bindings.TensorNHWC:
@@ -247,10 +244,7 @@ if torch_available:
                         B_torch_nchw = torch.permute(B_nhwc, (0, 3, 1, 2))
 
                     if self.layout_C == cutlass_bindings.TensorNHWC:
-                        if bias:
-                            C_nhwc = C.view((1, 1, 1, c))
-                        else:
-                            C_nhwc = C.view((n, h, w, c))
+                        C_nhwc = C.view((1, 1, 1, c)) if bias else C.view((n, h, w, c))
                         C_torch_nchw = torch.permute(C_nhwc, (0, 3, 1, 2))
                 else:
                     if self.layout_A == cutlass_bindings.TensorNHWC:
@@ -262,10 +256,7 @@ if torch_available:
                         B_torch_nchw = torch.permute(B_nhwc, (0, 3, 1, 2))
 
                     if self.layout_C == cutlass_bindings.TensorNHWC:
-                        if bias:
-                            C_nhwc = C.view((1, 1, 1, k))
-                        else:
-                            C_nhwc = C.view((n, p, q, k))
+                        C_nhwc = C.view((1, 1, 1, k)) if bias else C.view((n, p, q, k))
                         C_torch_nchw = torch.permute(C_nhwc, (0, 3, 1, 2))
 
             if self.kind == cutlass_bindings.conv.Operator.fprop:
@@ -306,12 +297,13 @@ if torch_available:
                     + beta * C_torch_nchw
                 )
 
-            if self.layout_C == cutlass_bindings.TensorNHWC:
-                if isinstance(A, np.ndarray):
+            if isinstance(A, np.ndarray):
+                if self.layout_C == cutlass_bindings.TensorNHWC:
                     D_torch_out = (
                         torch.permute(D_torch_nchw, (0, 2, 3, 1)).detach().cpu().numpy()
                     )
-                elif isinstance(A, torch.Tensor):
+            elif isinstance(A, torch.Tensor):
+                if self.layout_C == cutlass_bindings.TensorNHWC:
                     D_torch_out = torch.permute(D_torch_nchw, (0, 2, 3, 1))
 
             return D_torch_out.flatten()

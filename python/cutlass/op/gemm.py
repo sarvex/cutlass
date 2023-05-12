@@ -296,25 +296,24 @@ class Gemm(OperationBase):
         else:
             elements_per_access = self.epilogue_functor.epilogue_vector_length
 
-        if not self.specified_kernel_cc:
-            if self.current_cc == 90 and activation != epilogue.identity:
-                # CUTLASS 3.0 kernels currently only support identity activation. If one requests a non-identity activation,
-                # revert to using a CUTLASS 2.x kernel by using SM80-tagged kernels.
-                cutlass.logger.warning("Reverting to using SM80-tagged kernel. Opclass may change.")
-                self._reset_options(80)
-                self._reset_operations(reset_epilogue=False)
-            elif (self.cc == 90 and self.current_cc != 90 and activation == epilogue.identity):
-                # SM80 fallback kernels are currently used. Since an identity activation is requested,
-                # we can switch back to using SM90 kernels.
-                self._reset_options(90)
-                self._reset_operations(reset_epilogue=False)
-        else:
+        if self.specified_kernel_cc:
             if self.current_cc == 90 and activation != epilogue.identity:
                 raise Exception("Epilogues with elementwise fusion are not currently supported "
                                 "in the Python interface for 3.x kernels. To use 2.x kernels "
                                 "with fused elementwise epilogues, do not set the `kernel_cc` "
                                 "parameter when constructing the Gemm object.")
 
+        elif self.current_cc == 90 and activation != epilogue.identity:
+            # CUTLASS 3.0 kernels currently only support identity activation. If one requests a non-identity activation,
+            # revert to using a CUTLASS 2.x kernel by using SM80-tagged kernels.
+            cutlass.logger.warning("Reverting to using SM80-tagged kernel. Opclass may change.")
+            self._reset_options(80)
+            self._reset_operations(reset_epilogue=False)
+        elif (self.cc == 90 and self.current_cc != 90 and activation == epilogue.identity):
+            # SM80 fallback kernels are currently used. Since an identity activation is requested,
+            # we can switch back to using SM90 kernels.
+            self._reset_options(90)
+            self._reset_operations(reset_epilogue=False)
         self.epilogue_functor = epilogue.get_activation_epilogue(
             activation,
             datatypes.binding_type(self._element_c),
@@ -503,15 +502,15 @@ class Gemm(OperationBase):
                 raise Exception(f"Invalid tile description. {err_str}")
             self.tile_description = tile_description
 
-        operation = GemmOperationUniversal(
+        return GemmOperationUniversal(
             arch=self.current_cc,
             tile_description=tile_description,
-            A=tensor_A, B=tensor_B, C=tensor_C,
+            A=tensor_A,
+            B=tensor_B,
+            C=tensor_C,
             epilogue_functor=self.epilogue_functor,
             swizzling_functor=self._swizzling_functor,
         )
-
-        return operation
 
     def compile(self, tile_description: TileDescription = None,
                 alignment_A: int = None, alignment_B: int = None, alignment_C: int = None,

@@ -80,11 +80,11 @@ def getTensorRef(
     elif operand == "b":
         tensor_coord = problem_size.kn()
         batch_stride = problem_size.k() * problem_size.n()
-    elif operand in ["c", "d"]:
+    elif operand in {"c", "d"}:
         tensor_coord = problem_size.mn()
         batch_stride = problem_size.m() * problem_size.n()
     else:
-        raise ValueError("Unknown operand: " + operand)
+        raise ValueError(f"Unknown operand: {operand}")
 
     elt_size = DataTypeSizeBytes[to_cutlass(tensor.dtype)]
     ptr += batch_offset * batch_stride * elt_size
@@ -104,19 +104,19 @@ def getTensorRef(
     else:
         raise ValueError("unsupported layout")
     if tensor.dtype == np.float32:
-        ref_name = "TensorRefF32" + layout_tag
+        ref_name = f"TensorRefF32{layout_tag}"
     elif tensor.dtype == np.float64:
-        ref_name = "TensorRefF64" + layout_tag
+        ref_name = f"TensorRefF64{layout_tag}"
     elif tensor.dtype == np.float16:
-        ref_name = "TensorRefF16" + layout_tag
+        ref_name = f"TensorRefF16{layout_tag}"
     elif tensor.dtype == bfloat16:
-        ref_name = "TensorRefBF16" + layout_tag
+        ref_name = f"TensorRefBF16{layout_tag}"
     elif tensor.dtype == np.int8:
-        ref_name = "TensorRefS8" + layout_tag
+        ref_name = f"TensorRefS8{layout_tag}"
     elif tensor.dtype == np.int32:
-        ref_name = "TensorRefS32" + layout_tag
+        ref_name = f"TensorRefS32{layout_tag}"
     else:
-        raise ValueError("unsupported datatype %s" % ShortDataTypeNames[tensor.dtype])
+        raise ValueError(f"unsupported datatype {ShortDataTypeNames[tensor.dtype]}")
 
     return getattr(cutlass_bindings, ref_name)(ptr, layout)
 
@@ -134,10 +134,10 @@ def getTensorView(
         tensor_coord = problem_size.mk()
     elif operand == "b":
         tensor_coord = problem_size.kn()
-    elif operand in ["c", "d"]:
+    elif operand in {"c", "d"}:
         tensor_coord = problem_size.mn()
     else:
-        raise ValueError("Unknown operand: " + operand)
+        raise ValueError(f"Unknown operand: {operand}")
 
     if layout == cutlass_bindings.RowMajor:
         layout_tag = "RowMajor"
@@ -150,17 +150,17 @@ def getTensorView(
     else:
         raise ValueError("unsupported layout")
     if tensor.dtype == np.float32:
-        ref_name = "TensorViewF32" + layout_tag
+        ref_name = f"TensorViewF32{layout_tag}"
     elif tensor.dtype == np.float64:
-        ref_name = "TensorViewF64" + layout_tag
+        ref_name = f"TensorViewF64{layout_tag}"
     elif tensor.dtype == np.float16:
-        ref_name = "TensorViewF16" + layout_tag
+        ref_name = f"TensorViewF16{layout_tag}"
     elif tensor.dtype == bfloat16:
-        ref_name = "TensorViewBF16" + layout_tag
+        ref_name = f"TensorViewBF16{layout_tag}"
     elif tensor.dtype == np.int32:
-        ref_name = "TensorViewS32" + layout_tag
+        ref_name = f"TensorViewS32{layout_tag}"
     elif tensor.dtype == np.int8:
-        ref_name = "TensorViewS8" + layout_tag
+        ref_name = f"TensorViewS8{layout_tag}"
     else:
         raise ValueError("unsupported datatype")
 
@@ -201,11 +201,7 @@ class GemmUniversalLauncher:
         self.warmup_iterations = warmup_iterations
         self.iterations = iterations
 
-        if "sleep" in kwargs.keys():
-            self.sleep_time = kwargs["sleep"]
-        else:
-            self.sleep_time = 0
-
+        self.sleep_time = kwargs.get("sleep", 0)
         #
         # Compile the operator
         #
@@ -285,7 +281,7 @@ class GemmUniversalLauncher:
         elif type == cutlass_bindings.int8:
             return np.int8
         else:
-            raise ValueError("unsupported type: %s" % ShortDataTypeNames[type])
+            raise ValueError(f"unsupported type: {ShortDataTypeNames[type]}")
 
     def uniform_init(self, size, dtype):
         if dtype in [np.float32, np.float16, bfloat16, np.float64]:
@@ -434,9 +430,7 @@ class GemmUniversalLauncher:
         n = problem_size.n()
         k = problem_size.k()
 
-        flops_ = (m * n * k) * 2 * batch_count
-
-        return flops_
+        return (m * n * k) * 2 * batch_count
 
     def run_cutlass_profiler(
         self, mode, problem_size, batch_count=1, alpha=1.0, beta=0.0
@@ -447,7 +441,7 @@ class GemmUniversalLauncher:
         ), "Environment variable 'CUTLASS_PATH' is not defined."
 
         values = {
-            "profiler_path": cutlass_path + "/build/tools/profiler/cutlass_profiler",
+            "profiler_path": f"{cutlass_path}/build/tools/profiler/cutlass_profiler",
             "kernel_name": self.operation.procedural_name(),
             "verification_providers": "device",
             "provider": "cutlass",
@@ -470,13 +464,13 @@ class GemmUniversalLauncher:
         result = subprocess.getoutput(cmd)
 
         m = re.search(r"Runtime:\s+(?P<runtime>\d+.\d+)", result)
-        runtime = float(m.group("runtime"))
+        runtime = float(m["runtime"])
 
         m = re.search(r"Bytes:\s+(?P<bytes>\d+)", result)
-        bytes = int(m.group("bytes"))
+        bytes = int(m["bytes"])
 
         m = re.search(r"FLOPs:\s+(?P<flops>\d+)", result)
-        flops = int(m.group("flops"))
+        flops = int(m["flops"])
 
         # check if the problem size matches
         assert bytes == self.bytes(problem_size, alpha, beta)
@@ -598,9 +592,7 @@ class GemmUniversalLauncher:
             % get_allocated_size()
         )
 
-        if self.profiling:
-            return runtime
-        return passed
+        return runtime if self.profiling else passed
 
 
 def test_all_gemm(operation: "GemmOperationUniversal", testcase="universal"):
@@ -660,25 +652,21 @@ def test_all_gemm(operation: "GemmOperationUniversal", testcase="universal"):
     supports_split_k = operation.arch < 90 and not isinstance(
         operation.swizzling_functor, cutlass_bindings.ThreadblockSwizzleStreamK
     )
+    modes = [
+        cutlass_bindings.gemm.Mode.Gemm,
+    ]
     if testcase == "interleaved":
-        modes = [
-            cutlass_bindings.gemm.Mode.Gemm,
-        ]
         problem_size_m = [interleavedk, 512 + interleavedk]
         problem_size_n = [interleavedk, 512 + interleavedk]
         problem_size_k = [
             interleavedk,
             threadblock_k * operation.tile_description.stages + interleavedk,
         ]
-        problem_alpha = [1.0]
         problem_beta = [0.0]
         batch_counts = [
             1,
         ]
     elif testcase == "multistage":
-        modes = [
-            cutlass_bindings.gemm.Mode.Gemm,
-        ]
         problem_size_m = [16, 528]
         problem_size_n = [16, 528]
         problem_size_k = [
@@ -686,31 +674,30 @@ def test_all_gemm(operation: "GemmOperationUniversal", testcase="universal"):
             threadblock_k * operation.tile_description.stages
             + operation.tile_description.math_instruction.instruction_shape[2],
         ]
-        problem_alpha = [1.0]
         problem_beta = [0.0]
         batch_counts = [
             1,
         ]
-    else:  # universal
-        modes = [cutlass_bindings.gemm.Mode.Gemm]
+    else:
         batch_counts = [1, 2, 3, 5, 7]
         if supports_split_k:
             modes.append(cutlass_bindings.gemm.Mode.GemmSplitKParallel)
 
         problem_size_m = [alignment_m, 512 - 3 * alignment_m]
         problem_size_n = [alignment_n, 512 - 2 * alignment_n]
-        if operation.tile_description.stages is None:
-            stages_for_k_calc = 7
-        else:
-            stages_for_k_calc = operation.tile_description.stages
+        stages_for_k_calc = (
+            7
+            if operation.tile_description.stages is None
+            else operation.tile_description.stages
+        )
         problem_size_k = [
             alignment_k,
             threadblock_k * stages_for_k_calc - alignment_k,
             threadblock_k * stages_for_k_calc * 3 - alignment_k,
         ]
-        problem_alpha = [1.0]
         problem_beta = [2.0]
 
+    problem_alpha = [1.0]
     testbed = GemmUniversalLauncher(operation, interleaved=(testcase == "interleaved"))
 
     for mode in modes:
@@ -721,20 +708,19 @@ def test_all_gemm(operation: "GemmOperationUniversal", testcase="universal"):
                         for alpha in problem_alpha:
                             for beta in problem_beta:
                                 # skip very small K problems
-                                if testcase == "universal":
-                                    if k // batch_count < 2 * threadblock_k:
-                                        continue
+                                if (
+                                    testcase == "universal"
+                                    and k // batch_count < 2 * threadblock_k
+                                ):
+                                    continue
 
                                 problem_size = cutlass_bindings.gemm.GemmCoord(m, n, k)
 
-                                if supports_split_k:
-                                    split_k_slices = batch_count
-                                else:
-                                    split_k_slices = 1
-
+                                split_k_slices = batch_count if supports_split_k else 1
                                 overridden_mode = mode
                                 if (
-                                    mode == cutlass_bindings.gemm.Mode.Gemm
+                                    overridden_mode
+                                    == cutlass_bindings.gemm.Mode.Gemm
                                     and batch_count > 1
                                 ):
                                     overridden_mode = cutlass_bindings.gemm.Mode.Batched
@@ -750,7 +736,7 @@ def test_all_gemm(operation: "GemmOperationUniversal", testcase="universal"):
 
                                 (err,) = cudart.cudaDeviceSynchronize()
                                 if err != cuda.CUresult.CUDA_SUCCESS:
-                                    raise RuntimeError("CUDA Error %s" % str(err))
+                                    raise RuntimeError(f"CUDA Error {str(err)}")
 
                                 if not passed:
                                     return False

@@ -88,7 +88,7 @@ class CodeVisitor(ast.NodeVisitor):
             self.generic_visit(node)
 
     def visit_Assign(self, node):
-        print('Assign %s' % node.value)
+        print(f'Assign {node.value}')
         self.generic_visit(node)
 
     def visit_Name(self, node):
@@ -97,14 +97,16 @@ class CodeVisitor(ast.NodeVisitor):
 
 
     def visit_FunctionDef(self, node):
-        print('Function Name:%s'% node.name.op)
+        print(f'Function Name:{node.name.op}')
         self.generic_visit(node)
         func_log_stmt = ast.Print(
-            dest = None,
-            values = [ast.Str(s = 'calling func: %s' % node.name, lineno = 0, col_offset = 0)],
-            nl = True,
-            lineno = 0,
-            col_offset = 0,
+            dest=None,
+            values=[
+                ast.Str(s=f'calling func: {node.name}', lineno=0, col_offset=0)
+            ],
+            nl=True,
+            lineno=0,
+            col_offset=0,
         )
         node.body.insert(0, func_log_stmt)
 

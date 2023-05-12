@@ -73,12 +73,7 @@ class ReductionArguments:
         **kwargs,
     ) -> None:
         # tensor_C can be interpreted as the bias with bias=True in keyword args
-        if "bias" in kwargs.keys():
-            self.bias = kwargs["bias"]
-        else:
-            # by default, tensor_C is not bias
-            self.bias = False
-
+        self.bias = kwargs.get("bias", False)
         self.operation = operation
         #: pointer to the workspace
         self.ptr_workspace = workspace
@@ -107,7 +102,7 @@ class ReductionArguments:
             problem_size[0] * problem_size[1] * DataTypeSize[operation.C.element] // 8
         )
 
-        if "output_op" in kwargs.keys():
+        if "output_op" in kwargs:
             self.output_op = kwargs["output_op"]
         else:
             self.output_op = self.operation.epilogue_type(1.0, 0.0)
@@ -176,7 +171,7 @@ class ReductionArguments:
     def sync(self):
         (err,) = cudart.cudaDeviceSynchronize()
         if err != cuda.CUresult.CUDA_SUCCESS:
-            raise RuntimeError("CUDA Error %s" % str(err))
+            raise RuntimeError(f"CUDA Error {str(err)}")
 
         if hasattr(self, "host_D"):
             (err,) = cuda.cuMemcpyDtoH(
@@ -185,7 +180,7 @@ class ReductionArguments:
                 self.host_D.size * self.host_D.itemsize,
             )
             if err != cuda.CUresult.CUDA_SUCCESS:
-                raise RuntimeError("CUDA Error %s" % str(err))
+                raise RuntimeError(f"CUDA Error {str(err)}")
 
     def free(self):
         if hasattr(self, "destination_buffer"):
@@ -282,7 +277,7 @@ extern "C" {
             value=self.shared_memory_capacity,
         )
         if err != cuda.CUresult.CUDA_SUCCESS:
-            raise RuntimeError("Cuda Error: {}".format(err))
+            raise RuntimeError(f"Cuda Error: {err}")
 
 
 class ReductionOperation:
@@ -399,7 +394,7 @@ class ReductionOperation:
         )
 
         if err != cuda.CUresult.CUDA_SUCCESS:
-            raise RuntimeError("CUDA Error %s" % str(err))
+            raise RuntimeError(f"CUDA Error {str(err)}")
 
         return err
 

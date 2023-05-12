@@ -45,10 +45,7 @@ class Conv2dOperation:
   def accumulator_type(self):
     accum = self.tile_description.math_instruction.element_accumulator
 
-    if self.is_complex():
-      return get_complex_from_real(accum)
-
-    return accum
+    return get_complex_from_real(accum) if self.is_complex() else accum
 
   #
   def core_name(self):
@@ -58,14 +55,15 @@ class Conv2dOperation:
 
     if self.tile_description.math_instruction.opcode_class == OpcodeClass.TensorOp:
       inst_shape = "%d%d%d" % tuple(self.tile_description.math_instruction.instruction_shape)
-      if self.tile_description.math_instruction.element_a != self.A.element and \
-        self.tile_description.math_instruction.element_a != self.accumulator_type():
+      if self.tile_description.math_instruction.element_a not in [
+          self.A.element,
+          self.accumulator_type(),
+      ]:
         intermediate_type = DataTypeNames[self.tile_description.math_instruction.element_a]
     else:
       inst_shape = ''
 
-    return "%s%s%s%s_%s" % (ShortDataTypeNames[self.accumulator_type()], \
-      inst_shape, intermediate_type, ConvKindNames[self.conv_kind], IteratorAlgorithmNames[self.iterator_algorithm])
+    return f"{ShortDataTypeNames[self.accumulator_type()]}{inst_shape}{intermediate_type}{ConvKindNames[self.conv_kind]}_{IteratorAlgorithmNames[self.iterator_algorithm]}"
 
   #
   def extended_name(self):
@@ -89,7 +87,7 @@ class Conv2dOperation:
 
   #
   def layout_name(self):
-    return "%s" % (ShortLayoutTypeNames[self.A.layout])
+    return f"{ShortLayoutTypeNames[self.A.layout]}"
 
   #
   def configuration_name(self):
@@ -342,7 +340,8 @@ def GenerateConv2dTensorOp(manifest, tile_descriptions, min_cc, align = 128):
 class EmitConv2dConfigurationLibrary:
   def __init__(self, operation_path, configuration_name):
     self.configuration_name = configuration_name
-    self.configuration_path = os.path.join(operation_path, "%s.cu" % configuration_name)
+    self.configuration_path = os.path.join(operation_path,
+                                           f"{configuration_name}.cu")
 
     self.instance_emitter = EmitConv2dInstance()
 

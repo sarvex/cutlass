@@ -40,35 +40,32 @@ class CheckPackages:
     def check_cupy(self):
         if "cupy" in sys.modules:
             return True
-        else:
-            try:
-                import cupy
+        try:
+            import cupy
 
-                cupy_available = True
-            except ImportError:
-                print("cupy is not loaded.")
+            cupy_available = True
+        except ImportError:
+            print("cupy is not loaded.")
 
     def check_numpy(self):
         if "numpy" in sys.modules:
             return True
-        else:
-            try:
-                import numpy
+        try:
+            import numpy
 
-                numpy_available = True
-            except ImportError:
-                print("numpy is not loaded.")
+            numpy_available = True
+        except ImportError:
+            print("numpy is not loaded.")
 
     def check_torch(self):
         if "torch" in sys.modules:
             return True
-        else:
-            try:
-                import torch
+        try:
+            import torch
 
-                torch_available = True
-            except ImportError:
-                print("torch is not loaded.")
+            torch_available = True
+        except ImportError:
+            print("torch is not loaded.")
 
 
 def SubstituteTemplate(template, values):
@@ -105,7 +102,6 @@ def device_sm_count():
 
 
 def get_memory_pool(init_pool_size=0, max_pool_size=2 ** 34):
-    memory_pool = PoolMemoryManager(
+    return PoolMemoryManager(
         init_pool_size=init_pool_size, max_pool_size=max_pool_size
     )
-    return memory_pool

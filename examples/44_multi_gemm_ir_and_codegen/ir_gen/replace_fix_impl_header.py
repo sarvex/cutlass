@@ -43,7 +43,7 @@ class replace_fix_impl:
     def gen_code(self):
         for sub_dir in os.walk(self.src_dir):
             files_in_sub_dir = sub_dir[2]
- 
+
             src_dirs = sub_dir[0]
             output_dirs = self.dst_dir + sub_dir[0][len(self.src_dir):]
 
@@ -51,7 +51,7 @@ class replace_fix_impl:
                 os.mkdir(output_dirs) 
 
             for f in files_in_sub_dir:
-                with open(src_dirs +"/" + f, 'r') as current_file:
+                with open(f"{src_dirs}/{f}", 'r') as current_file:
                     output_lines = []
                     lines = current_file.readlines()
 
@@ -63,5 +63,5 @@ class replace_fix_impl:
                         else:
                             output_lines.append(line)
 
-                    with open(output_dirs + "/"  + f, "w+") as dest_file:
+                    with open(f"{output_dirs}/{f}", "w+") as dest_file:
                         dest_file.writelines(output_lines)

@@ -106,11 +106,7 @@ def add_test(cls, layouts, alignments, element_output, element_accumulator, elem
 
         self.assertTrue(test_all_gemm(operation, "universal"))
 
-    if persistent:
-        suffix = "_persistent"
-    else:
-        suffix = ""
-
+    suffix = "_persistent" if persistent else ""
     name = name_fn(layouts, alignments, element_output, element_accumulator,
                   element_epilogue, cluster_shape, threadblock_shape, stages, opclass=opclass, suffix=suffix)
     setattr(cls, name, run)

@@ -42,9 +42,7 @@ class gen_test:
         self.b2b_num = len(fuse_gemm_info)
 
     def gen_cpp_sample(self):
-        code = "/* Auto Generated code - Do not edit.*/\n"
-        code +=  "#include <stdio.h> \n"
-
+        code = "/* Auto Generated code - Do not edit.*/\n" + "#include <stdio.h> \n"
         code += "#include \"cutlass/gemm/device/gemm_batched.h\" \n"
         code += "#include \"cutlass/cutlass.h\" \n"
 
@@ -54,7 +52,7 @@ class gen_test:
         code += "#include \"leaky_bias.h\" \n"
 
         code +=  "#include \"utils.h\" \n"
-        
+
 
 
         code += "int main(int args, char * argv[]) {\n"
@@ -76,8 +74,9 @@ class gen_test:
 
         for i in range(self.b2b_num):
             code += "    " + helper.var_idx("ElementCompute alpha", i) + " = ElementCompute(1);\n"
-            addbias = helper.get_epilogue_add_bias_or_not( self.fuse_gemm_info[i])
-            if addbias:
+            if addbias := helper.get_epilogue_add_bias_or_not(
+                self.fuse_gemm_info[i]
+            ):
                 code += "    " + helper.var_idx("ElementCompute beta", i) + " = ElementCompute(1);\n"
             else:
                 code += "    " + helper.var_idx("ElementCompute beta", i) + " = ElementCompute(0);\n"
@@ -90,7 +89,7 @@ class gen_test:
             k = self.fuse_gemm_info[i]['mnk'][2]
 
             bias_shape = helper.get_epilogue_bias_shape(self.fuse_gemm_info[i])
-            
+
             this_k = "K0"
             if (i > 0):
                 this_k = str(k)
@@ -112,18 +111,18 @@ class gen_test:
 
         code += "    " + helper.var_idx("memory_unit<cutlass::half_t> Mat_D", self.b2b_num - 1) +  helper.var_idx("(B * problem_size_", i) + helper.var_idx(".m() * problem_size_",self.b2b_num - 1) + ".n());\n"
 
-        params = []
-        params.append("M")
-        params.append("B")
-
-        params.append("Mat_A0.device_ptr")
+        params = ["M", "B", "Mat_A0.device_ptr"]
         for i in range(self.b2b_num):
-            params.append(helper.var_idx("Mat_B", i) + ".device_ptr")
-            params.append(helper.var_idx("Mat_C", i) + ".device_ptr")
+            params.extend(
+                (
+                    helper.var_idx("Mat_B", i) + ".device_ptr",
+                    helper.var_idx("Mat_C", i) + ".device_ptr",
+                )
+            )
             if i != self.b2b_num-1:
                 params.append(helper.var_idx("Mat_D_cutlass_ref", i) + ".device_ptr")
         params.append(helper.var_idx("Mat_D", self.b2b_num - 1) + ".device_ptr")
-    
+
         code += "    " + "Param arguments = {\n"
         code += "    " + "    " + "M,\n"
         code += "    " + "    " + "K0,\n"
@@ -195,15 +194,21 @@ class gen_test:
                 code_this += "    " + "    " + "{reinterpret_cast<" + helper.type_2_cutlass_type(self.fuse_gemm_info[i]['A_tp']) + "*>(" + helper.var_idx("Mat_D_cutlass_ref", i - 1) + ".device_ptr), " + ldmA + "}, " + "M * " + ldmA + ",\n"
 
             code_this += "    " + "    " + "{reinterpret_cast<" + helper.type_2_cutlass_type(self.fuse_gemm_info[i]['B_tp']) + "*>(" + helper.var_idx("Mat_B", i) + ".device_ptr), " + ldmB + "}, " + N_str + " * " + ldmB + ",\n"
-            
+
             M_bias = str(helper.get_epilogue_bias_shape(self.fuse_gemm_info[i])[0])
 
             code_this += "    " + "    " + "{reinterpret_cast<" + helper.type_2_cutlass_type(self.fuse_gemm_info[i]['C_tp']) + "*>(" + helper.var_idx("Mat_C", i) + ".device_ptr), " + ldmBias + "}, " + M_bias + " * " + N_str + ",\n"
             code_this += "    " + "    " + "{reinterpret_cast<" + helper.type_2_cutlass_type(self.fuse_gemm_info[i]['C_tp']) + "*>(" + helper.var_idx("Mat_D_cutlass_ref", i) + ".device_ptr), " + ldmC + "}, " + "M * " + ldmC + ",\n"
-            code_this += "    " + "    " + "{ " + helper.var_idx("alpha", i) + ", " + helper.var_idx("beta", i) 
-            for epilogue_arg in  helper.get_epilogue_args(self.fuse_gemm_info[i]):
+            code_this += "    " + "    " + "{ " + helper.var_idx("alpha", i) + ", " + helper.var_idx("beta", i)
+            for epilogue_arg in helper.get_epilogue_args(self.fuse_gemm_info[i]):
                 arg_value = str(epilogue_arg[2])
-                code_this += ", " + helper.type_2_cutlass_type(self.fuse_gemm_info[i]['Acc_tp']) + "(" + str(arg_value) + ")"
+                code_this += (
+                    ", "
+                    + helper.type_2_cutlass_type(self.fuse_gemm_info[i]['Acc_tp'])
+                    + "("
+                    + arg_value
+                    + ")"
+                )
             code_this += "    " + " },\n"
             code_this += "    " + "    " + "B};\n"
 
@@ -224,9 +229,9 @@ class gen_test:
         code += "    " + helper.var_idx("Mat_D_cutlass_ref", self.b2b_num - 1) + ".d2h();\n"
         code += "    " + helper.var_idx("Mat_D", self.b2b_num - 1) + ".d2h();\n"
         code += "    " + helper.var_idx("check_result(Mat_D_cutlass_ref", self.b2b_num - 1) + helper.var_idx(".host_ptr, Mat_D", self.b2b_num - 1) \
-                       + helper.var_idx(".host_ptr, Mat_D", self.b2b_num - 1) + ".elements);\n"
+                           + helper.var_idx(".host_ptr, Mat_D", self.b2b_num - 1) + ".elements);\n"
 
         code += "\n\n}\n"
 
-        with open(self.sample_dir + "sample.cu", "w+") as f:
+        with open(f"{self.sample_dir}sample.cu", "w+") as f:
             f.write(code)

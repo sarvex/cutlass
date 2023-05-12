@@ -155,15 +155,13 @@ except ImportError:
 
 
 def bfloat16_library_type(inp) -> cutlass.DataType:
-    if bfloat16_available:
-        if inp == bfloat16.bfloat16:
-            return cutlass.DataType.bf16
+    if bfloat16_available and inp == bfloat16.bfloat16:
+        return cutlass.DataType.bf16
 
 
 def bfloat16_type(inp) -> bfloat16.bfloat16:
-    if bfloat16_available:
-        if inp == cutlass.DataType.bf16:
-            return bfloat16.bfloat16
+    if bfloat16_available and inp == cutlass.DataType.bf16:
+        return bfloat16.bfloat16
 
 
 # Mapping from library data type to Python-bound CUTLASS data type
@@ -190,9 +188,7 @@ binding_to_library = {
 
 
 def binding_library_type(inp):
-    if inp in binding_to_library:
-        return binding_to_library[inp]
-    return None
+    return binding_to_library[inp] if inp in binding_to_library else None
 
 
 def has_binding_type(inp: cutlass.DataType):

@@ -62,7 +62,7 @@ def getTensorRef(tensor, tensor_layout, conv_kind, problem_size, operand):
             conv_kind, problem_size
         )
     else:
-        raise ValueError("unknown operand: " + operand)
+        raise ValueError(f"unknown operand: {operand}")
 
     layout = tensor_layout.packed(tensor_coord)
 
@@ -103,7 +103,7 @@ def getTensorView(tensor, tensor_layout, conv_kind, problem_size, operand):
             conv_kind, problem_size
         )
     else:
-        raise ValueError("unknown operand: " + operand)
+        raise ValueError(f"unknown operand: {operand}")
 
     if tensor.dtype == np.float64:
         return cutlass_bindings.TensorViewF64NHWC(tensor_ref, tensor_coord)
@@ -167,11 +167,7 @@ class Conv2dLauncher:
         self.warmup_iterations = warmup_iterations
         self.iterations = iterations
 
-        if "sleep" in kwargs.keys():
-            self.sleep_time = kwargs["sleep"]
-        else:
-            self.sleep_time = 0
-
+        self.sleep_time = kwargs.get("sleep", 0)
         #
         # Compile the operator
         #
@@ -197,10 +193,7 @@ class Conv2dLauncher:
         if element_size <= 8:
             self.scope = 1
         elif element_size == 16:
-            if accumulator_size <= 16:
-                self.scope = 2
-            else:
-                self.scope = 4
+            self.scope = 2 if accumulator_size <= 16 else 4
         else:
             self.scope = 7
 
@@ -234,7 +227,7 @@ class Conv2dLauncher:
         elif type == cutlass_bindings.int8:
             return np.int8
         else:
-            raise ValueError("unsupported type: %s" % ShortDataTypeNames[type])
+            raise ValueError(f"unsupported type: {ShortDataTypeNames[type]}")
 
     def print_problem_size(self, p, split_k_mode=1):
         print(
@@ -314,9 +307,7 @@ class Conv2dLauncher:
                 problem_size.stride_h * problem_size.stride_w
             )
 
-        flops_total_ = flops_mainloop_ + flops_epilogue_
-
-        return flops_total_
+        return flops_mainloop_ + flops_epilogue_
 
     def host_reference(self, problem_size, tensor_A, tensor_B, tensor_C, alpha, beta):
         if self.element_compute == cutlass_bindings.float16:
@@ -397,20 +388,19 @@ class Conv2dLauncher:
                 tensor_D_ref, self.layout_D, self.conv_kind, problem_size, "d"
             )
 
-            if self.enable_cached_results:
-                cached_test_result.D = cutlass_bindings.test.conv.host.TensorHash(
-                    tensor_view_D_ref
-                )
-                cached_results = (
-                    cutlass_bindings.test.conv.host.CachedTestResultListing(
-                        conv2d_result_cache_name
-                    )
-                )
-                cached_results.append(cached_test_key, cached_test_result)
-                cached_results.write(conv2d_result_cache_name)
-            else:
+            if not self.enable_cached_results:
                 return tensor_D_ref
 
+            cached_test_result.D = cutlass_bindings.test.conv.host.TensorHash(
+                tensor_view_D_ref
+            )
+            cached_results = (
+                cutlass_bindings.test.conv.host.CachedTestResultListing(
+                    conv2d_result_cache_name
+                )
+            )
+            cached_results.append(cached_test_key, cached_test_result)
+            cached_results.write(conv2d_result_cache_name)
         return cached_test_result.D
 
     def equal(self, tensor_D, tensor_D_ref, problem_size):
@@ -450,7 +440,7 @@ class Conv2dLauncher:
         ), "Environment variable 'CUTLASS_PATH' is not defined."
 
         values = {
-            "profiler_path": cutlass_path + "/build/tools/profiler/cutlass_profiler",
+            "profiler_path": f"{cutlass_path}/build/tools/profiler/cutlass_profiler",
             "kernel_name": self.operation.procedural_name(),
             "verification_providers": "device",
             "provider": "cutlass",
@@ -489,13 +479,13 @@ class Conv2dLauncher:
         result = subprocess.getoutput(cmd)
 
         m = re.search(r"Runtime:\s+(?P<runtime>\d+.\d+)", result)
-        runtime = float(m.group("runtime"))
+        runtime = float(m["runtime"])
 
         m = re.search(r"Bytes:\s+(?P<bytes>\d+)", result)
-        bytes = int(m.group("bytes"))
+        bytes = int(m["bytes"])
 
         m = re.search(r"FLOPs:\s+(?P<flops>\d+)", result)
-        flops = int(m.group("flops"))
+        flops = int(m["flops"])
 
         # check if the problem size matches
         assert bytes == self.bytes(problem_size, alpha, beta)
@@ -611,9 +601,7 @@ class Conv2dLauncher:
             "%d byte of pool memory is not released after current run"
             % get_allocated_size()
         )
-        if self.profiling:
-            return runtime
-        return passed
+        return runtime if self.profiling else passed
 
 
 ########################################################################################################
@@ -644,7 +632,7 @@ def test_all_conv2d(operation: Conv2dOperation, conv_test_sizes=[], interleaved=
     # Flatten 2D problem_vectors into a 1D problem sizes
     problem_sizes = conv_problems.conv2d_default_sizes
 
-    problem_sizes = [conv_problem for conv_problem in problem_sizes] + conv_test_sizes
+    problem_sizes = list(problem_sizes) + conv_test_sizes
 
     # Sweep conv2d problem sizes (split-k-mode=kSerial, split-k-slices=1, alpha=1.0, beta=0.0)
     for conv_problem in problem_sizes:
@@ -652,9 +640,10 @@ def test_all_conv2d(operation: Conv2dOperation, conv_test_sizes=[], interleaved=
             continue
 
         # skip channel dimension % 32 != 0 for interleaved case
-        if interleaved:
-            if conv_problem.K % 32 != 0 or conv_problem.C % 32 != 0:
-                continue
+        if interleaved and (
+            conv_problem.K % 32 != 0 or conv_problem.C % 32 != 0
+        ):
+            continue
 
         #
         # Procedurally disable certain cases
@@ -664,37 +653,37 @@ def test_all_conv2d(operation: Conv2dOperation, conv_test_sizes=[], interleaved=
         if (
             operation.conv_kind == cutlass_bindings.conv.Operator.dgrad
             and operation.stride_support == StrideSupport.Unity
-        ):
-            if not ((conv_problem.stride_h == 1) and (conv_problem.stride_w == 1)):
-                continue
+        ) and (conv_problem.stride_h != 1 or conv_problem.stride_w != 1):
+            continue
 
         if not interleaved:
             # Fixed channels algorithm requires channel count to match access size
             if (
                 operation.iterator_algorithm
                 == cutlass_bindings.conv.IteratorAlgorithm.fixed_channels
-            ):
-                if conv_problem.C != operation.A.alignment:
-                    continue
+            ) and conv_problem.C != operation.A.alignment:
+                continue
 
             # Few channels algorithm requires channel count to match access size
             if (
                 operation.iterator_algorithm
                 == cutlass_bindings.conv.IteratorAlgorithm.few_channels
-            ):
-                if conv_problem.C % operation.A.alignment:
-                    continue
+            ) and conv_problem.C % operation.A.alignment:
+                continue
 
             # CUTLASS DGRAD's *strided* stride specialization supports all stride {stride_h, stride_w}
             # Although strided dgrad works for all stride combinations, we are only going
             # to run strided dgrad for non-unity strides
 
             if (
-                operation.conv_kind == cutlass_bindings.conv.Operator.dgrad
-                and operation.stride_support == StrideSupport.Strided
+                (
+                    operation.conv_kind == cutlass_bindings.conv.Operator.dgrad
+                    and operation.stride_support == StrideSupport.Strided
+                )
+                and (conv_problem.stride_h == 1)
+                and (conv_problem.stride_w == 1)
             ):
-                if (conv_problem.stride_h == 1) and (conv_problem.stride_w == 1):
-                    continue
+                continue
 
         #
         # Test

@@ -139,8 +139,9 @@ except:
 
 cc = device_cc()
 if args.compute_capability != cc:
-    raise Exception(("Parameter --compute-capability of {} "
-                    "does not match that of the device of {}.").format(args.compute_capability, cc))
+    raise Exception(
+        f"Parameter --compute-capability of {args.compute_capability} does not match that of the device of {cc}."
+    )
 
 pycutlass.get_memory_pool(init_pool_size=2**30, max_pool_size=2**32)
 pycutlass.compiler.nvcc()
@@ -291,35 +292,33 @@ problem_size = cutlass_bindings.gemm.GemmCoord(
     args.problem_size[0], args.problem_size[1], args.problem_size[2])
 
 tensor_a_size = args.batch * problem_size.m() * problem_size.k()
-if args.element_a != "int8":
-    if args.element_a == "bfloat16":
-        tensor_A = np.ceil(
-            np.random.uniform(low=-8.5, high=7.5, size=(tensor_a_size,))
-            ).astype(bfloat16)
-    else:
-        tensor_A = np.ceil(
-            np.random.uniform(low=-8.5, high=7.5, size=(tensor_a_size,))
-            ).astype(getattr(np, args.element_a))
-else:
+if args.element_a == "int8":
     tensor_A = np.random.uniform(
         low=-2, high=2,size=(tensor_a_size,)
         ).astype(getattr(np, args.element_a))
 
-tensor_b_size = args.batch * problem_size.k() * problem_size.n()
-if args.element_b != "int8":
-    if args.element_b == "bfloat16":
-        tensor_B = np.ceil(
-            np.random.uniform(low=-8.5, high=7.5, size=(tensor_b_size,))
-            ).astype(bfloat16)
-    else:
-        tensor_B = np.ceil(
-            np.random.uniform(low=-8.5, high=7.5, size=(tensor_b_size,))
-            ).astype(getattr(np, args.element_b))
+elif args.element_a == "bfloat16":
+    tensor_A = np.ceil(
+        np.random.uniform(low=-8.5, high=7.5, size=(tensor_a_size,))
+        ).astype(bfloat16)
 else:
+    tensor_A = np.ceil(
+        np.random.uniform(low=-8.5, high=7.5, size=(tensor_a_size,))
+        ).astype(getattr(np, args.element_a))
+tensor_b_size = args.batch * problem_size.k() * problem_size.n()
+if args.element_b == "int8":
     tensor_B = np.random.uniform(
         low=-2, high=2, size=(tensor_b_size,)
         ).astype(getattr(np, args.element_b))
 
+elif args.element_b == "bfloat16":
+    tensor_B = np.ceil(
+        np.random.uniform(low=-8.5, high=7.5, size=(tensor_b_size,))
+        ).astype(bfloat16)
+else:
+    tensor_B = np.ceil(
+        np.random.uniform(low=-8.5, high=7.5, size=(tensor_b_size,))
+        ).astype(getattr(np, args.element_b))
 if args.element_c != "int8":
     if args.bias:
         if args.layout_c == "RowMajor":
@@ -432,7 +431,7 @@ elif args.epilogue_visitor in ["RowBroadcast", "ColumnBroadcast"]:
     output_op.sync()
     accum_ref = reference.run(
         tensor_A, tensor_B, tensor_C, problem_size, 1.0, 0.0, args.bias, args.batch)
-    
+
     tensor_D_ref, tensor_T_ref = epilogue_functor(
         accum_ref.reshape((args.batch, problem_size.m(), problem_size.n())),
         tensor_C.reshape((args.batch, problem_size.m(), problem_size.n())), 

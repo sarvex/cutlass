@@ -36,8 +36,9 @@ class gen_build_sys:
         self.cutlass_deps_dir = cutlass_deps_dir
 
     def gen_top(self):
-        code = ""
-        code += '''\
+        code = (
+            ""
+            + '''\
 # Auto Generated code - Do not edit.
 
 cmake_minimum_required(VERSION 3.8)
@@ -47,8 +48,10 @@ set(CUDA_PATH ${{CUDA_TOOLKIT_ROOT_DIR}})
 set(CUTLASS_PATH \"{cutlass_deps_dir}/include\")
 set(CUTLASS_UTIL_PATH \"{cutlass_deps_dir}/tools/util/include\")
 list(APPEND CMAKE_MODULE_PATH ${{CUDAToolkit_LIBRARY_DIR}})
-'''.format(cutlass_deps_dir=self.cutlass_deps_dir)
-
+'''.format(
+                cutlass_deps_dir=self.cutlass_deps_dir
+            )
+        )
         code += '''\
 set(GPU_ARCHS \"\" CACHE STRING
   \"List of GPU architectures (semicolon-separated) to be compiled for.\")
@@ -127,5 +130,5 @@ endif()
 
     def gen_code(self):
         top_code = self.gen_top()
-        with open(self.output_dir + "CMakeLists.txt", "w") as f:
+        with open(f"{self.output_dir}CMakeLists.txt", "w") as f:
             f.write(top_code)

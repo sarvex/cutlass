@@ -312,7 +312,7 @@ class GemmErrorTests(unittest.TestCase):
 
         # Zero stage count is valid for SM90+, as this is used to indicate that the builder's auto stage
         # count should be used
-        with ExpectException(cc < 90, f'Requested zero stages'):
+        with ExpectException(cc < 90, 'Requested zero stages'):
             td.stages = 0
             plan.construct(td)
 
@@ -320,7 +320,7 @@ class GemmErrorTests(unittest.TestCase):
             td.stages = 3
             plan.construct(td)
 
-        with ExpectException(True, f'Requested too many stages'):
+        with ExpectException(True, 'Requested too many stages'):
             td.stages = 100
             plan.construct(td)
 
@@ -342,7 +342,7 @@ class GemmErrorTests(unittest.TestCase):
 
         # Ensure that all returned tile descriptions are unique
         ops = {}
-        for i, td in enumerate(plan.tile_descriptions()):
+        for td in plan.tile_descriptions():
             op = plan.construct(td)
             code_str = op.rt_module.emit()
             if code_str in ops:

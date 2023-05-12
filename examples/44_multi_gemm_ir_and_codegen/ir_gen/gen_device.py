@@ -48,17 +48,17 @@ class gen_device:
         # device arg struct memebr
         self.arg_member = []
         self.gen_class_name = gen_class_name
-        self.gen_kernel_name = gen_class_name + "Kernel"
+        self.gen_kernel_name = f"{gen_class_name}Kernel"
         self.tempalte_args = []
         self.__tempalate_arg_list = {'Stages': int, 'SplitKSerial': bool, 'IsBetaZero': bool, 'AlignmentA': int, 'AlignmentB': int}
 
-        self.file_name = output_dir + "/device/" +gen_class_name +".h"
+        self.file_name = f"{output_dir}/device/{gen_class_name}.h"
         self.sample_dir = output_dir
 
 
         self.cutlass_deps_root = cutlass_deps_root
         self.project_root = project_root
-        self.this_file_root = output_dir + "/device/"
+        self.this_file_root = f"{output_dir}/device/"
 
         self.first_use_1stage = False
 
@@ -69,18 +69,21 @@ class gen_device:
     def __check_arg_type(self, temp_arg):
         if temp_arg in self.__tempalate_arg_list.keys():
             return self.__tempalate_arg_list[temp_arg] 
-        
+
         find_sub = False
-        for candidate_arg in self.__tempalate_arg_list.keys():
-            if (temp_arg.find(candidate_arg) != -1):
-                return self.__tempalate_arg_list[candidate_arg] 
-        
-        return 'typename'
+        return next(
+            (
+                self.__tempalate_arg_list[candidate_arg]
+                for candidate_arg in self.__tempalate_arg_list.keys()
+                if (temp_arg.find(candidate_arg) != -1)
+            ),
+            'typename',
+        )
 
     # def gen_B2b2bGemm_class():
     def set_arch(self, sm_cap, mma_tp):
-        if sm_cap == 75 or sm_cap == 80 or sm_cap == 86:
-            self.arch = "cutlass::arch::Sm" + str(sm_cap)
+        if sm_cap in [75, 80, 86]:
+            self.arch = f"cutlass::arch::Sm{str(sm_cap)}"
 
         if mma_tp is 'hmma1688':
             self.mma_shape = [16, 8, 8]
@@ -111,9 +114,9 @@ class gen_device:
 #include \"{project_root}../kernel/b2b_gemm.h\"
 #include \"{project_root}../kernel/default_b2b_gemm.h\"
 '''.format(cutlass_root=self.cutlass_deps_root, project_root=self.project_root, this_file_root=self.this_file_root)
-        include_user_header = ""
-        for header in self.user_header_file:
-            include_user_header += "#include \"" + header + "\"\n"
+        include_user_header = "".join(
+            "#include \"" + header + "\"\n" for header in self.user_header_file
+        )
         return code + include_user_header
 
     def gen_code(self, sm_cap, mma_tp, ifprint = True):
@@ -149,35 +152,29 @@ class gen_device:
         self.args['ElementA'] = helper.type_2_cutlass_type(self.fuse_gemm_info[0]['A_tp'])
         self.args['LayoutA'] = helper.type_2_cutlass_type(self.fuse_gemm_info[0]['A_format'])
 
-        cnt = 0
-
-        warp_M_tile = 32
-
         # Determine maxmimum N_tile
         Max_Ntile = 0
         for layer in self.fuse_gemm_info:
             n_tile = layer['mnk'][1]
             if n_tile > Max_Ntile:
                 Max_Ntile = n_tile
-        if Max_Ntile >= 256:
-            warp_M_tile = 16
-
+        warp_M_tile = 16 if Max_Ntile >= 256 else 32
         stages_temp = []
 
-        for layer in self.fuse_gemm_info:
+        for cnt, layer in enumerate(self.fuse_gemm_info):
             cnt_str = str(cnt)
-            B_tp_str= 'ElementB' + cnt_str
-            B_format_str = 'LayoutB' + cnt_str
-            C_tp_str= 'ElementC' + cnt_str
-            C_format_str = 'LayoutC' + cnt_str
-            Acc_str = 'ElementAccumulator' + cnt_str
+            B_tp_str = f'ElementB{cnt_str}'
+            B_format_str = f'LayoutB{cnt_str}'
+            C_tp_str = f'ElementC{cnt_str}'
+            C_format_str = f'LayoutC{cnt_str}'
+            Acc_str = f'ElementAccumulator{cnt_str}'
 
             self.args[B_tp_str] = helper.type_2_cutlass_type(layer['B_tp'])
             self.args[B_format_str] = helper.type_2_cutlass_type(layer['B_format'])
             self.args[C_tp_str] = helper.type_2_cutlass_type(layer['C_tp'])
             self.args[C_format_str] = helper.type_2_cutlass_type(layer['C_format'])
             self.args[Acc_str] = helper.type_2_cutlass_type(layer['Acc_tp'])
-            
+
 
             mnk = layer['mnk'][:]
 
@@ -217,11 +214,12 @@ class gen_device:
             elif epilogue_setted_type.lower() == 'identity':
                 cutlass_epilogue_name = "LinearCombination"
 
-            epilogue_str = 'EpilogueOutputOp' + cnt_str
+            epilogue_str = f'EpilogueOutputOp{cnt_str}'
             if cnt != len(self.fuse_gemm_info) - 1:
-                n = layer['mnk'][1]
                 Fragments = tile_mnk[1] // 8 * 2
-                self.args[epilogue_str] = "cutlass::epilogue::thread::" + cutlass_epilogue_name + "<ElementC0_, " + str(Fragments) +", ElementAccumulator0_, ElementAccumulator0_>"
+                self.args[
+                    epilogue_str
+                ] = f"cutlass::epilogue::thread::{cutlass_epilogue_name}<ElementC0_, {str(Fragments)}, ElementAccumulator0_, ElementAccumulator0_>"
             else:
                 n = layer['mnk'][1]
                 n_mod_8 = n % 4
@@ -230,31 +228,30 @@ class gen_device:
                     N_align_elements = 8
                 elif n_mod_8 == 4:
                     N_align_elements = 4
-                elif n_mod_8 == 2 or n_mod_8 == 6:
+                elif n_mod_8 in [2, 6]:
                     N_align_elements = 2
 
-                self.args[epilogue_str] = "cutlass::epilogue::thread::" + cutlass_epilogue_name+ "<ElementC0_, " + str(N_align_elements) + ", ElementAccumulator0_, ElementAccumulator0_>"
+                self.args[
+                    epilogue_str
+                ] = f"cutlass::epilogue::thread::{cutlass_epilogue_name}<ElementC0_, {N_align_elements}, ElementAccumulator0_, ElementAccumulator0_>"
 
-            
+                        
 
-            ThreadBlockShape_str = 'ThreadblockShape' + cnt_str
+            ThreadBlockShape_str = f'ThreadblockShape{cnt_str}'
 
             self.args[ThreadBlockShape_str] = helper.cvt_2_cutlass_shape(tile_mnk)
 
-            WarpShape_str = 'WarpShape' + cnt_str
+            WarpShape_str = f'WarpShape{cnt_str}'
             tile_mnk[0] = warp_M_tile
             self.args[WarpShape_str] = helper.cvt_2_cutlass_shape(tile_mnk)
-            cnt += 1
-
-
         self.args['ElementD'] = helper.type_2_cutlass_type(self.fuse_gemm_info[self.b2b_num - 1]['C_tp'])
         self.args['LayoutD'] = helper.type_2_cutlass_type(self.fuse_gemm_info[self.b2b_num - 1]['C_format'])
-        
+
         self.args['InstructionShape'] = helper.cvt_2_cutlass_shape(self.mma_shape)
         self.args['OperatorClass'] = 'arch::OpClassTensorOp'
         self.args['ArchTag'] = self.arch
         self.args['ThreadblockSwizzle'] = 'threadblock::GemmBatchedIdentityThreadblockSwizzle'
-        
+
 
         for i in range(self.b2b_num):
             self.args[helper.var_idx('Stages', i)] = "2"
@@ -309,37 +306,37 @@ class gen_device:
 
             for i in range(b2b_num):
                 member_type = "GemmCoord"
-                member_name = "problem_size_" + str(i)
+                member_name = f"problem_size_{str(i)}"
                 data_members.append((member_type, member_name))
 
             member_type = "TensorRef<ElementA const, LayoutA>"
             member_name = "ref_A0"
             data_members.append((member_type, member_name))
-            
+
             for i in range(b2b_num):
-                member_type = "TensorRef<ElementB" + str(i) + " const, LayoutB" + str(i) +">"
-                member_name = "ref_B" + str(i)
+                member_type = f"TensorRef<ElementB{str(i)} const, LayoutB{str(i)}>"
+                member_name = f"ref_B{str(i)}"
                 data_members.append((member_type, member_name))
-                member_type = "TensorRef<ElementC" + str(i) + " const, LayoutC" + str(i) +">"
-                member_name = "ref_C" + str(i)
+                member_type = f"TensorRef<ElementC{str(i)} const, LayoutC{str(i)}>"
+                member_name = f"ref_C{str(i)}"
                 data_members.append((member_type, member_name))
-            
+
             member_type = "TensorRef<ElementD, LayoutD>"
             member_name = helper.var_idx("ref_D", b2b_num - 1)
             data_members.append((member_type, member_name))
 
             for i in range(b2b_num):
-                member_type = "typename EpilogueOutputOp" + str(i) + "::Params"
-                member_name = "epilogue" + str(i)
+                member_type = f"typename EpilogueOutputOp{str(i)}::Params"
+                member_name = f"epilogue{str(i)}"
                 data_members.append((member_type, member_name))
 
             data_members.append(('int', 'batch_count'))
 
             return data_members
-        
+
         def gen_arg_struct_default_ctor(struct_name, data_members, inital_param_num, inital_value):
             constructs_code = gen_ir.indentation + "CUTLASS_HOST_DEVICE\n" + \
-                              gen_ir.indentation + struct_name + " (): "
+                                  gen_ir.indentation + struct_name + " (): "
             for i in range(inital_param_num):
                 final_param = ','
                 if i == inital_param_num - 1:
@@ -351,7 +348,7 @@ class gen_device:
 
         def gen_arg_struct_ctor(struct_name, data_members):
             constructs_code = gen_ir.indentation + "CUTLASS_HOST_DEVICE\n" + \
-                              gen_ir.indentation + struct_name + " (\n"
+                                  gen_ir.indentation + struct_name + " (\n"
             cnt = 0
             param_num = len(data_members)
             for param in data_members:
@@ -386,8 +383,7 @@ class gen_device:
         return struct_code
 
     def gen_func_constructs(self):
-        code = self.gen_class_name +"() {}"
-        return code
+        return self.gen_class_name +"() {}"
 
     def gen_func_initialize(self):
         code = "Status initialize(Arguments const &args, void *workspace = nullptr, cudaStream_t stream = nullptr) {\n" + \
@@ -418,37 +414,37 @@ class gen_device:
         return code 
 
     def gen_func_run(self):
-        code = "Status run(cudaStream_t stream = nullptr) {\n" + \
-                "\n" + \
-                "  ThreadblockSwizzle threadblock_swizzle;\n" + \
-                "\n" + \
-                "  dim3 grid = threadblock_swizzle.get_grid_shape(params_.grid_tiled_shape);\n" + \
-                "  dim3 block(B2bGemmKernel::kThreadCount, 1, 1);\n" + \
-                "\n" + \
-                "  cudaError_t result;\n" + \
-                "\n" + \
-                "  int smem_size = int(sizeof(typename B2bGemmKernel::SharedStorage));\n" + \
-                "  if (smem_size >= (48 << 10)) {\n" + \
-                "    result = cudaFuncSetAttribute(Kernel<B2bGemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);\n" + \
-                "\n" + \
-                "    if (result != cudaSuccess) {\n" + \
-                "      return Status::kErrorInternal;\n" + \
-                "    }\n" + \
-                "\n" + \
-                "    result = cudaFuncSetAttribute(\n" + \
-                "        Kernel<B2bGemmKernel>,\n" + \
-                "        cudaFuncAttributePreferredSharedMemoryCarveout, 100);\n" + \
-                "\n" + \
-                "    if (result != cudaSuccess) {\n" + \
-                "      return Status::kErrorInternal;\n" + \
-                "    }\n" + \
-                "  }\n" + \
-                "  cutlass::Kernel<B2bGemmKernel><<<grid, block, smem_size, stream>>>(params_);\n" + \
-                "  result = cudaGetLastError();\n" + \
-                "  return result == cudaSuccess ? Status::kSuccess : Status::kErrorInternal;\n" + \
-                "  }\n"
-        
-        return code
+        return (
+            "Status run(cudaStream_t stream = nullptr) {\n"
+            + "\n"
+            + "  ThreadblockSwizzle threadblock_swizzle;\n"
+            + "\n"
+            + "  dim3 grid = threadblock_swizzle.get_grid_shape(params_.grid_tiled_shape);\n"
+            + "  dim3 block(B2bGemmKernel::kThreadCount, 1, 1);\n"
+            + "\n"
+            + "  cudaError_t result;\n"
+            + "\n"
+            + "  int smem_size = int(sizeof(typename B2bGemmKernel::SharedStorage));\n"
+            + "  if (smem_size >= (48 << 10)) {\n"
+            + "    result = cudaFuncSetAttribute(Kernel<B2bGemmKernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);\n"
+            + "\n"
+            + "    if (result != cudaSuccess) {\n"
+            + "      return Status::kErrorInternal;\n"
+            + "    }\n"
+            + "\n"
+            + "    result = cudaFuncSetAttribute(\n"
+            + "        Kernel<B2bGemmKernel>,\n"
+            + "        cudaFuncAttributePreferredSharedMemoryCarveout, 100);\n"
+            + "\n"
+            + "    if (result != cudaSuccess) {\n"
+            + "      return Status::kErrorInternal;\n"
+            + "    }\n"
+            + "  }\n"
+            + "  cutlass::Kernel<B2bGemmKernel><<<grid, block, smem_size, stream>>>(params_);\n"
+            + "  result = cudaGetLastError();\n"
+            + "  return result == cudaSuccess ? Status::kSuccess : Status::kErrorInternal;\n"
+            + "  }\n"
+        )
     def gen_func_operator(self):
         opeartor_with_arg_code = "Status operator()(\n" + \
                                 "  Arguments const &args,\n" + \

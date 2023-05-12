@@ -123,12 +123,15 @@ class Conv2dArguments(ArgumentBase):
         super().__init__(A, B, C, D, **kwargs)
         # preprocessing output ops
 
-        if "output_op" in kwargs.keys() and split_k_mode != cutlass_bindings.conv.SplitKMode.Parallel:
+        if (
+            "output_op" in kwargs
+            and split_k_mode != cutlass_bindings.conv.SplitKMode.Parallel
+        ):
             self.output_op = kwargs["output_op"]
         else:
             self.output_op = self.operation.epilogue_type(1.0, 0.0)
 
-        if "split_k_slices" in kwargs.keys():
+        if "split_k_slices" in kwargs:
             self.split_k_mode = split_k_mode
             self.split_k_slices = kwargs["split_k_slices"]
         else:
@@ -186,7 +189,7 @@ class Conv2dArguments(ArgumentBase):
             tensor_coord = cutlass_bindings.conv.implicit_gemm_tensor_c_extent(
                 self.conv_kind, problem_size)
         else:
-            raise ValueError("unknown operand: " + operand)
+            raise ValueError(f"unknown operand: {operand}")
         # Zero stride trick
         if operand == "c" and self.bias:
             tensor_coord = cutlass_bindings.Tensor4DCoord(0, 0, 0, 0)
@@ -363,7 +366,7 @@ extern "C" {
             attrib=cuda.CUfunction_attribute.CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
             value=self.shared_memory_capacity)
         if err != cuda.CUresult.CUDA_SUCCESS:
-            raise RuntimeError("Cuda Error: {}".format(err))
+            raise RuntimeError(f"Cuda Error: {err}")
 
 
 class Conv2dOperation:
@@ -453,7 +456,7 @@ class Conv2dOperation:
         )
 
         if err != cuda.CUresult.CUDA_SUCCESS:
-            raise RuntimeError("CUDA Error %s" % str(err))
+            raise RuntimeError(f"CUDA Error {str(err)}")
 
         return err
 
@@ -520,7 +523,7 @@ class Conv2dOperation:
 
     #
     def layout_name(self):
-        return "%s" % (ShortLayoutTypeNames[self.A.layout])
+        return f"{ShortLayoutTypeNames[self.A.layout]}"
 
     #
     def core_name(self):
@@ -531,19 +534,15 @@ class Conv2dOperation:
         if self.tile_description.math_instruction.opcode_class == cutlass_bindings.OpClass.TensorOp:
             inst_shape = "%dx%dx%d" % tuple(
                 self.tile_description.math_instruction.instruction_shape)
-            if self.tile_description.math_instruction.element_a != self.A.element and \
-                    self.tile_description.math_instruction.element_a != self.accumulator_type():
+            if self.tile_description.math_instruction.element_a not in [
+                self.A.element,
+                self.accumulator_type(),
+            ]:
                 intermediate_type = DataTypeNames[self.tile_description.math_instruction.element_a]
         else:
             inst_shape = ""
 
-        return "%s%s%s%s_%s" % (
-            ShortDataTypeNames[self.accumulator_type()],
-            inst_shape,
-            intermediate_type,
-            ConvKindNames[self.conv_kind],
-            IteratorAlgorithmNames[self.iterator_algorithm]
-        )
+        return f"{ShortDataTypeNames[self.accumulator_type()]}{inst_shape}{intermediate_type}{ConvKindNames[self.conv_kind]}_{IteratorAlgorithmNames[self.iterator_algorithm]}"
 
     #
     def is_complex(self):
@@ -557,10 +556,7 @@ class Conv2dOperation:
     def accumulator_type(self):
         accum = self.tile_description.math_instruction.element_accumulator
 
-        if self.is_complex():
-            return get_complex_from_real(accum)
-
-        return accum
+        return get_complex_from_real(accum) if self.is_complex() else accum
 
 
 ###################################################################################################
